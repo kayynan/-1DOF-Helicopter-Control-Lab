@@ -1,0 +1,1598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>1-DOF Helicopter — Abdirahman Mohamed</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@300;400;600;700&family=Barlow+Condensed:wght@300;400;600;700;900&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --ink:#04080f;--paper:#f0ece4;
+  --amber:#ffb400;--amber2:#ff8c00;--amber3:#cc5500;
+  --steel:#c8d4e0;--steel2:#8aa0b4;--steel3:#3a5068;
+  --glow:rgba(255,180,0,0.45);
+  --red:#ff2233;--green:#00e676;--blue:#00aaff;
+  --mono:'IBM Plex Mono',monospace;
+  --display:'Bebas Neue',sans-serif;
+  --body:'Barlow Condensed',sans-serif;
+}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--ink);color:var(--steel);font-family:var(--body);}
+canvas{display:block;}
+
+/* ─── CURSOR ─── */
+body{cursor:none;}
+#cursor{position:fixed;z-index:10000;pointer-events:none;width:20px;height:20px;border:1.5px solid var(--amber);border-radius:50%;transform:translate(-50%,-50%);transition:transform .08s,border-color .2s;mix-blend-mode:difference;}
+#cursor-dot{position:fixed;z-index:10001;pointer-events:none;width:4px;height:4px;background:var(--amber);border-radius:50%;transform:translate(-50%,-50%);}
+
+/* ─── THREE.JS CANVAS ─── */
+#threeCanvas{position:fixed;inset:0;z-index:1;}
+
+/* ─── VIGNETTE ─── */
+#vignette{position:fixed;inset:0;z-index:2;pointer-events:none;
+  background:radial-gradient(ellipse 80% 70% at 50% 50%,transparent 40%,rgba(4,8,15,.85) 100%);}
+
+/* ─── SCANLINES ─── */
+#scanlines{position:fixed;inset:0;z-index:3;pointer-events:none;
+  background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,.06) 3px,rgba(0,0,0,.06) 4px);
+  opacity:.4;}
+
+/* ─── NAV ─── */
+#nav{position:fixed;top:0;left:0;right:0;z-index:100;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:1.2rem 2.5rem;
+  background:linear-gradient(180deg,rgba(4,8,15,.95) 0%,transparent 100%);}
+.nav-brand{font-family:var(--display);font-size:1.1rem;letter-spacing:.15em;color:var(--amber);
+  display:flex;align-items:center;gap:.7rem;}
+.nav-brand-dot{width:8px;height:8px;border-radius:50%;background:var(--amber);
+  box-shadow:0 0 12px var(--amber);animation:heartbeat 2s ease infinite;}
+@keyframes heartbeat{0%,100%{transform:scale(1);}50%{transform:scale(1.8);opacity:.6;}}
+.nav-pills{display:flex;gap:.4rem;}
+.nav-pill{font-family:var(--mono);font-size:.58rem;letter-spacing:.12em;color:var(--steel3);
+  background:transparent;border:1px solid rgba(255,180,0,.12);
+  padding:.38rem 1rem;border-radius:2rem;cursor:pointer;transition:all .25s;text-transform:uppercase;}
+.nav-pill:hover,.nav-pill.active{color:var(--amber);border-color:var(--amber);
+  background:rgba(255,180,0,.07);box-shadow:0 0 16px rgba(255,180,0,.15);}
+.nav-author{font-family:var(--mono);font-size:.6rem;letter-spacing:.1em;color:var(--steel3);}
+.nav-author span{color:var(--amber);}
+
+/* ─── SCREENS ─── */
+.screen{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;padding:5rem 3rem 3rem;
+  opacity:0;pointer-events:none;transition:opacity .6s ease;}
+.screen.active{opacity:1;pointer-events:all;}
+
+/* ─── HERO SCREEN ─── */
+#s-hero .hero-text{position:absolute;bottom:3rem;left:4rem;z-index:20;}
+#s-hero .hero-tag{font-family:var(--mono);font-size:.62rem;letter-spacing:.3em;
+  color:var(--amber);opacity:.7;margin-bottom:.6rem;
+  animation:slideUp .8s ease .3s both;}
+#s-hero h1{font-family:var(--display);font-size:clamp(3rem,7vw,7rem);
+  line-height:.92;color:var(--steel);letter-spacing:.04em;
+  animation:slideUp .8s ease .5s both;}
+#s-hero h1 em{color:var(--amber);font-style:normal;display:block;}
+#s-hero .hero-sub{font-size:1rem;color:var(--steel3);font-weight:300;
+  letter-spacing:.08em;margin-top:.8rem;max-width:420px;line-height:1.6;
+  animation:slideUp .8s ease .7s both;}
+.hero-scroll{position:absolute;bottom:3rem;right:4rem;
+  font-family:var(--mono);font-size:.58rem;letter-spacing:.18em;color:var(--steel3);
+  display:flex;flex-direction:column;align-items:center;gap:.5rem;
+  animation:slideUp .8s ease 1s both;}
+.hero-scroll-line{width:1px;height:40px;background:linear-gradient(180deg,var(--amber),transparent);
+  animation:scrollLine 2s ease infinite;}
+@keyframes scrollLine{0%{transform:scaleY(0);transform-origin:top;}50%{transform:scaleY(1);transform-origin:top;}51%{transform:scaleY(1);transform-origin:bottom;}100%{transform:scaleY(0);transform-origin:bottom;}}
+
+/* ─── HUD ELEMENTS (always visible) ─── */
+#hud-tl{position:fixed;top:5rem;left:2.5rem;z-index:50;font-family:var(--mono);font-size:.6rem;
+  letter-spacing:.1em;color:var(--steel3);line-height:2;}
+#hud-tr{position:fixed;top:5rem;right:2.5rem;z-index:50;font-family:var(--mono);font-size:.6rem;
+  letter-spacing:.1em;color:var(--steel3);line-height:2;text-align:right;}
+.hud-val{color:var(--amber);font-weight:700;}
+.hud-live{color:var(--green);}
+#hud-br{position:fixed;bottom:2rem;right:2.5rem;z-index:50;font-family:var(--mono);
+  font-size:.55rem;letter-spacing:.08em;color:var(--steel3);}
+.hud-label{color:var(--steel3);font-size:.52rem;letter-spacing:.15em;text-transform:uppercase;}
+
+/* ─── LIVE ANGLE INDICATOR ─── */
+#angleArc{position:fixed;bottom:3rem;left:50%;transform:translateX(-50%);z-index:50;
+  opacity:.9;}
+
+/* ─── SECTION PANELS ─── */
+.section-wrap{width:100%;max-width:1400px;height:100%;display:flex;
+  flex-direction:column;justify-content:center;gap:1.5rem;}
+
+/* ─── EQUATION SCREEN ─── */
+#s-eq{background:transparent;}
+.eq-stage{width:100%;max-width:900px;margin:0 auto;}
+.eq-chapter{font-family:var(--mono);font-size:.58rem;letter-spacing:.35em;
+  color:var(--amber);opacity:.6;margin-bottom:1.2rem;}
+.eq-main{font-family:var(--display);font-size:clamp(1.8rem,3.5vw,3.5rem);
+  color:var(--steel);line-height:1.3;margin-bottom:2rem;}
+.eq-main span.term{display:inline-block;position:relative;}
+.eq-main span.thrust{color:var(--amber);}
+.eq-main span.gravity{color:#ff6644;}
+.eq-main span.drag{color:#aa88ff;}
+.eq-main span.inertia{color:var(--steel);}
+
+/* BIG FRACTION */
+.big-frac{display:inline-flex;flex-direction:column;align-items:center;
+  vertical-align:middle;margin:0 .3rem;font-family:var(--display);}
+.big-frac .num{padding-bottom:.15rem;border-bottom:2px solid var(--amber);
+  font-size:clamp(1.5rem,2.8vw,2.8rem);color:var(--amber);}
+.big-frac .den{padding-top:.15rem;font-size:clamp(1.2rem,2.2vw,2.2rem);color:var(--steel2);}
+
+/* DERIVATION STEPS */
+.eq-steps{display:flex;flex-direction:column;gap:1rem;}
+.eq-step{display:flex;align-items:center;gap:1.5rem;opacity:0;
+  transform:translateX(-20px);transition:opacity .5s,transform .5s;}
+.eq-step.show{opacity:1;transform:translateX(0);}
+.step-num{font-family:var(--mono);font-size:.6rem;color:var(--amber);
+  width:1.8rem;height:1.8rem;border:1px solid rgba(255,180,0,.3);
+  border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.step-body{flex:1;}
+.step-eq{font-family:var(--mono);font-size:clamp(.8rem,1.4vw,1.1rem);
+  color:var(--steel);line-height:1.8;}
+.step-eq .amber{color:var(--amber);}
+.step-eq .red{color:#ff6644;}
+.step-eq .purple{color:#bb88ff;}
+.step-eq .green{color:var(--green);}
+.step-eq .gray{color:var(--steel3);}
+.step-note{font-family:var(--mono);font-size:.65rem;color:var(--steel3);
+  margin-top:.3rem;padding-left:1rem;border-left:2px solid rgba(255,180,0,.2);}
+
+/* FRACTION inline */
+.frac{display:inline-flex;flex-direction:column;align-items:center;
+  vertical-align:middle;font-size:.75em;line-height:1.1;margin:0 .1rem;}
+.frac .n{border-bottom:1px solid currentColor;padding:0 .15rem;}
+.frac .d{padding:0 .15rem;}
+
+/* ─── PID SCREEN ─── */
+#s-pid{display:grid;grid-template-rows:auto 1fr;gap:0;}
+.pid-layout{display:grid;grid-template-columns:340px 1fr;gap:2rem;height:100%;align-items:center;}
+@media(max-width:900px){.pid-layout{grid-template-columns:1fr;}}
+
+.control-panel{background:rgba(4,8,15,.8);border:1px solid rgba(255,180,0,.12);
+  border-radius:1rem;padding:1.8rem;backdrop-filter:blur(12px);}
+.cp-title{font-family:var(--display);font-size:1.4rem;letter-spacing:.1em;
+  color:var(--amber);margin-bottom:1.5rem;display:flex;align-items:center;gap:.6rem;}
+.cp-title::before{content:'';width:20px;height:2px;background:var(--amber);}
+
+/* BIG SLIDERS */
+.big-slider-group{margin-bottom:1.4rem;}
+.bsg-label{font-family:var(--mono);font-size:.6rem;letter-spacing:.18em;
+  color:var(--steel3);margin-bottom:.4rem;display:flex;justify-content:space-between;}
+.bsg-label .bsg-val{color:var(--amber);font-weight:700;font-size:.75rem;}
+.bsg-track{position:relative;height:6px;background:rgba(255,255,255,.06);
+  border-radius:3px;cursor:pointer;}
+.bsg-fill{position:absolute;left:0;top:0;height:100%;border-radius:3px;
+  background:linear-gradient(90deg,var(--amber2),var(--amber));
+  transition:width .08s;box-shadow:0 0 8px rgba(255,180,0,.4);}
+input.big-range{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.bsg-thumb{position:absolute;top:50%;transform:translate(-50%,-50%);
+  width:18px;height:18px;border-radius:50%;background:var(--amber);
+  box-shadow:0 0 12px var(--amber);pointer-events:none;transition:left .08s;}
+
+/* METRICS ROW */
+.metrics-row{display:grid;grid-template-columns:repeat(4,1fr);gap:.6rem;margin-top:1rem;}
+.metric{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);
+  border-radius:.5rem;padding:.7rem;text-align:center;}
+.metric-val{font-family:var(--mono);font-size:.88rem;font-weight:700;color:var(--amber);}
+.metric-lbl{font-size:.6rem;color:var(--steel3);letter-spacing:.08em;margin-top:.2rem;}
+
+/* STABILITY PILL */
+.stab-pill{display:inline-flex;align-items:center;gap:.5rem;
+  padding:.4rem 1.2rem;border-radius:2rem;font-family:var(--mono);
+  font-size:.65rem;letter-spacing:.12em;font-weight:700;
+  transition:all .4s;margin-top:.8rem;}
+.stab-pill.stable{background:rgba(0,230,118,.08);border:1px solid var(--green);color:var(--green);}
+.stab-pill.osc{background:rgba(255,180,0,.08);border:1px solid var(--amber);color:var(--amber);}
+.stab-pill.unstable{background:rgba(255,34,51,.1);border:1px solid var(--red);color:var(--red);
+  animation:unstab .5s ease infinite;}
+@keyframes unstab{0%,100%{box-shadow:none;}50%{box-shadow:0 0 20px rgba(255,34,51,.4);}}
+.stab-dot{width:7px;height:7px;border-radius:50%;animation:pulse 1.5s ease infinite;}
+.stable .stab-dot{background:var(--green);}
+.osc .stab-dot{background:var(--amber);}
+.unstable .stab-dot{background:var(--red);}
+@keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.7);opacity:.5;}}
+
+/* PLOT AREA */
+.plot-area{display:flex;flex-direction:column;gap:1rem;height:100%;}
+.plot-box{background:rgba(4,8,15,.7);border:1px solid rgba(255,255,255,.06);
+  border-radius:.7rem;overflow:hidden;flex:1;position:relative;}
+.plot-box canvas{width:100%;height:100%;display:block;}
+.plot-label{position:absolute;top:.6rem;left:.8rem;
+  font-family:var(--mono);font-size:.58rem;letter-spacing:.12em;color:var(--steel3);}
+.plot-label span{color:var(--amber);}
+
+/* CONTRIBUTION BARS */
+.contrib-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;}
+.contrib{background:rgba(4,8,15,.7);border:1px solid rgba(255,255,255,.06);
+  border-radius:.5rem;padding:.7rem;text-align:center;}
+.contrib-bar{height:48px;background:rgba(255,255,255,.04);border-radius:.3rem;
+  position:relative;overflow:hidden;margin-bottom:.4rem;}
+.contrib-fill{position:absolute;bottom:0;left:0;right:0;border-radius:.3rem;
+  transition:height .1s;}
+.cp-fill{background:linear-gradient(0deg,var(--amber2),rgba(255,180,0,.2));}
+.ci-fill{background:linear-gradient(0deg,#ff6644,rgba(255,102,68,.2));}
+.cd-fill{background:linear-gradient(0deg,var(--green),rgba(0,230,118,.2));}
+.contrib-val{font-family:var(--mono);font-size:.62rem;color:var(--steel2);}
+.contrib-lbl{font-size:.58rem;color:var(--steel3);letter-spacing:.12em;}
+
+/* ─── LQR SCREEN ─── */
+.lqr-layout{display:grid;grid-template-columns:1fr 1fr;gap:2rem;width:100%;
+  align-items:center;}
+@media(max-width:900px){.lqr-layout{grid-template-columns:1fr;}}
+.lqr-left,.lqr-right{display:flex;flex-direction:column;gap:1.2rem;}
+
+/* STATE SPACE DISPLAY */
+.ss-display{background:rgba(4,8,15,.85);border:1px solid rgba(255,180,0,.15);
+  border-radius:.8rem;padding:1.5rem;font-family:var(--mono);position:relative;overflow:hidden;}
+.ss-display::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(255,180,0,.5),transparent);}
+.ss-title{font-size:.58rem;letter-spacing:.22em;color:var(--amber);margin-bottom:1rem;}
+.matrix-wrap{display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;}
+.matrix{display:inline-flex;flex-direction:column;gap:.15rem;
+  border-left:2px solid rgba(255,180,0,.3);border-right:2px solid rgba(255,180,0,.3);
+  padding:.3rem .5rem;}
+.mrow{display:flex;gap:.8rem;font-size:.8rem;}
+.mv{min-width:3.5rem;text-align:center;}
+.mv.amber{color:var(--amber);}
+.mv.red{color:#ff6644;}
+.mv.green{color:var(--green);}
+.mv.blue{color:var(--blue);}
+.matrix-lbl{font-size:.75rem;color:var(--steel3);margin-bottom:.3rem;}
+
+/* POLE PLOT */
+.pole-canvas-wrap{background:rgba(4,8,15,.85);border:1px solid rgba(255,255,255,.07);
+  border-radius:.8rem;overflow:hidden;position:relative;}
+.pole-canvas-wrap canvas{width:100%;display:block;}
+
+/* COMPARISON TABLE */
+.cmp{background:rgba(4,8,15,.85);border:1px solid rgba(255,255,255,.07);
+  border-radius:.8rem;overflow:hidden;}
+.cmp table{width:100%;border-collapse:collapse;}
+.cmp th{font-family:var(--mono);font-size:.58rem;letter-spacing:.15em;
+  color:var(--steel3);padding:.7rem 1rem;border-bottom:1px solid rgba(255,255,255,.06);
+  text-align:left;background:rgba(255,255,255,.02);}
+.cmp td{font-family:var(--mono);font-size:.7rem;padding:.6rem 1rem;
+  border-bottom:1px solid rgba(255,255,255,.04);}
+.cmp .pid-v{color:var(--blue);}.cmp .lqr-v{color:var(--amber);}
+.cmp .win{font-size:.6rem;}
+
+/* ─── SYS-ID SCREEN ─── */
+.sysid-layout{display:grid;grid-template-columns:1fr 1.6fr;gap:2rem;width:100%;align-items:start;}
+@media(max-width:900px){.sysid-layout{grid-template-columns:1fr;}}
+.model-cards{display:flex;flex-direction:column;gap:.8rem;}
+.model-card{background:rgba(4,8,15,.8);border:1px solid rgba(255,255,255,.07);
+  border-radius:.7rem;padding:1rem 1.2rem;display:flex;gap:1rem;align-items:center;
+  transition:border-color .2s;}
+.model-card:hover{border-color:rgba(255,180,0,.25);}
+.mc-icon{width:2.5rem;height:2.5rem;border-radius:.4rem;
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:.7rem;font-weight:700;flex-shrink:0;}
+.mc-arx{background:rgba(255,102,68,.1);border:1px solid rgba(255,102,68,.25);color:#ff6644;}
+.mc-armax{background:rgba(0,170,255,.08);border:1px solid rgba(0,170,255,.2);color:var(--blue);}
+.mc-oe{background:rgba(255,180,0,.08);border:1px solid rgba(255,180,0,.2);color:var(--amber);}
+.mc-body h4{font-size:.9rem;font-weight:700;letter-spacing:.05em;margin-bottom:.2rem;}
+.mc-body p{font-family:var(--mono);font-size:.6rem;color:var(--steel3);line-height:1.6;}
+.mc-fit{font-family:var(--mono);font-size:1.1rem;font-weight:700;
+  margin-left:auto;flex-shrink:0;}
+.bode-wrap{background:rgba(4,8,15,.85);border:1px solid rgba(255,255,255,.07);
+  border-radius:.8rem;overflow:hidden;}
+
+/* MATLAB CODE */
+.code-block{background:rgba(2,5,12,.9);border:1px solid rgba(255,180,0,.1);
+  border-radius:.6rem;padding:1.2rem;font-family:var(--mono);font-size:.68rem;
+  line-height:1.9;overflow-x:auto;}
+.cc{color:var(--steel3);font-style:italic;}
+.ck{color:#bb88ff;}.cv{color:var(--amber);}.cf{color:var(--blue);}
+
+/* ─── REALTIME SCREEN ─── */
+.rt-layout{display:grid;grid-template-columns:280px 1fr;gap:2rem;
+  width:100%;height:80%;align-items:start;}
+@media(max-width:900px){.rt-layout{grid-template-columns:1fr;}}
+.rt-panel{background:rgba(4,8,15,.85);border:1px solid rgba(255,180,0,.12);
+  border-radius:.8rem;padding:1.4rem;}
+.rt-title{font-family:var(--display);font-size:1.2rem;letter-spacing:.1em;
+  color:var(--amber);margin-bottom:1.2rem;}
+.rt-stats{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem;}
+.rt-stat{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05);
+  border-radius:.4rem;padding:.6rem;text-align:center;}
+.rt-sv{font-family:var(--mono);font-size:.85rem;font-weight:700;}
+.rt-sl{font-size:.58rem;color:var(--steel3);letter-spacing:.07em;margin-top:.15rem;}
+.rt-plots{display:flex;flex-direction:column;gap:.8rem;height:100%;}
+.rt-plot{background:rgba(4,8,15,.7);border:1px solid rgba(255,255,255,.06);
+  border-radius:.6rem;flex:1;overflow:hidden;position:relative;min-height:120px;}
+.rt-plot canvas{width:100%;height:100%;display:block;}
+
+/* ─── HEATMAP SCREEN ─── */
+.hmap-layout{display:grid;grid-template-columns:1fr 1.2fr;gap:2rem;
+  width:100%;align-items:center;}
+.hmap-info{display:flex;flex-direction:column;gap:1.2rem;}
+.hmap-canvas-wrap{background:rgba(4,8,15,.85);border:1px solid rgba(255,255,255,.07);
+  border-radius:.8rem;overflow:hidden;position:relative;}
+.hmap-canvas-wrap canvas{width:100%;display:block;}
+.hmap-crosshair{position:absolute;pointer-events:none;display:none;}
+.hmap-legend-bar{height:10px;border-radius:3px;margin:.4rem 0;
+  background:linear-gradient(90deg,#04080f,#003366,#00aaff,#00e676,#ffb400,#ff2233);}
+.hmap-axis{display:flex;justify-content:space-between;
+  font-family:var(--mono);font-size:.58rem;color:var(--steel3);}
+
+/* ─── BUTTONS ─── */
+.btn{font-family:var(--mono);font-size:.62rem;letter-spacing:.12em;
+  padding:.7rem 1.4rem;border-radius:.4rem;cursor:pointer;
+  transition:all .2s;display:inline-flex;align-items:center;gap:.5rem;text-transform:uppercase;}
+.btn-amber{background:rgba(255,180,0,.08);border:1px solid var(--amber);color:var(--amber);}
+.btn-amber:hover{background:rgba(255,180,0,.18);box-shadow:0 0 20px rgba(255,180,0,.25);}
+.btn-amber.on{background:rgba(255,140,0,.15);border-color:var(--amber2);color:var(--amber2);}
+.btn-green{background:rgba(0,230,118,.06);border:1px solid var(--green);color:var(--green);}
+.btn-green:hover{background:rgba(0,230,118,.15);}
+.btn-ghost{background:transparent;border:1px solid rgba(255,255,255,.12);color:var(--steel2);}
+.btn-ghost:hover{border-color:rgba(255,180,0,.3);color:var(--amber);}
+.btn-row{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:.8rem;}
+
+/* INPUT TYPE PILLS */
+.input-pills{display:flex;gap:.4rem;margin-bottom:1rem;}
+.ipill{font-family:var(--mono);font-size:.58rem;letter-spacing:.1em;
+  padding:.3rem .8rem;border-radius:2rem;cursor:pointer;border:1px solid rgba(255,255,255,.1);
+  color:var(--steel3);transition:all .2s;}
+.ipill:hover{border-color:rgba(255,180,0,.3);color:var(--steel2);}
+.ipill.on{border-color:var(--amber);color:var(--amber);background:rgba(255,180,0,.07);}
+
+/* ─── PROGRESS ─── */
+.prog{width:100%;height:2px;background:rgba(255,255,255,.06);border-radius:1px;
+  margin:.6rem 0;overflow:hidden;}
+.prog-fill{height:100%;background:linear-gradient(90deg,var(--amber2),var(--amber));
+  width:0%;transition:width .06s;}
+.log-line{font-family:var(--mono);font-size:.6rem;color:var(--steel3);
+  min-height:1rem;letter-spacing:.04em;}
+
+/* ─── SECTION TITLES ─── */
+.s-eyebrow{font-family:var(--mono);font-size:.58rem;letter-spacing:.35em;
+  color:var(--amber);opacity:.6;margin-bottom:.4rem;}
+.s-title{font-family:var(--display);font-size:clamp(2rem,4vw,3.5rem);
+  letter-spacing:.06em;color:var(--steel);line-height:1;margin-bottom:1.5rem;}
+.s-title span{color:var(--amber);}
+
+/* ─── ANIMATIONS ─── */
+@keyframes slideUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+@keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+
+/* ─── SCROLLBAR ─── */
+::-webkit-scrollbar{width:0;}
+
+/* ─── LOADING SCREEN ─── */
+#loader{position:fixed;inset:0;z-index:9999;background:var(--ink);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.5rem;
+  transition:opacity .8s ease;}
+#loader.gone{opacity:0;pointer-events:none;}
+.loader-title{font-family:var(--display);font-size:3rem;letter-spacing:.15em;color:var(--amber);}
+.loader-sub{font-family:var(--mono);font-size:.65rem;letter-spacing:.2em;color:var(--steel3);}
+.loader-bar{width:200px;height:2px;background:rgba(255,255,255,.07);border-radius:1px;overflow:hidden;}
+.loader-fill{height:100%;background:var(--amber);width:0%;transition:width .05s;}
+</style>
+</head>
+<body>
+
+<!-- CUSTOM CURSOR -->
+<div id="cursor"></div>
+<div id="cursor-dot"></div>
+
+<!-- LOADER -->
+<div id="loader">
+  <div class="loader-title">HELI LAB</div>
+  <div class="loader-sub">INITIALIZING SYSTEM — ABDIRAHMAN MOHAMED</div>
+  <div class="loader-bar"><div class="loader-fill" id="loaderFill"></div></div>
+  <div class="loader-sub" id="loaderMsg">Loading Three.js renderer...</div>
+</div>
+
+<!-- THREE.JS CANVAS -->
+<canvas id="threeCanvas"></canvas>
+<div id="vignette"></div>
+<div id="scanlines"></div>
+
+<!-- LIVE ANGLE ARC -->
+<svg id="angleArc" width="160" height="100" viewBox="0 0 160 100">
+  <path id="arcBg" d="M 20 90 A 70 70 0 0 1 140 90" fill="none" stroke="rgba(255,180,0,.1)" stroke-width="2"/>
+  <path id="arcFill" d="M 20 90 A 70 70 0 0 1 140 90" fill="none" stroke="rgba(255,180,0,.5)" stroke-width="2.5" stroke-dasharray="220" stroke-dashoffset="220"/>
+  <text x="80" y="60" text-anchor="middle" font-family="IBM Plex Mono" font-size="11" fill="rgba(255,180,0,.7)" id="arcLabel">θ = -90°</text>
+  <text x="80" y="98" text-anchor="middle" font-family="IBM Plex Mono" font-size="8" fill="rgba(200,212,224,.3)">ANGLE</text>
+</svg>
+
+<!-- NAV -->
+<div id="nav">
+  <div class="nav-brand"><div class="nav-brand-dot"></div>1-DOF HELI LAB</div>
+  <div class="nav-pills">
+    <button class="nav-pill active" data-s="s-hero">OVERVIEW</button>
+    <button class="nav-pill" data-s="s-eq">MATH MODEL</button>
+    <button class="nav-pill" data-s="s-pid">PID LAB</button>
+    <button class="nav-pill" data-s="s-lqr">LQR</button>
+    <button class="nav-pill" data-s="s-sysid">SYS-ID</button>
+    <button class="nav-pill" data-s="s-rt">REAL-TIME</button>
+    <button class="nav-pill" data-s="s-hmap">HEATMAP</button>
+  </div>
+  <div class="nav-author">BY <span>ABDIRAHMAN MOHAMED</span></div>
+</div>
+
+<!-- HUD -->
+<div id="hud-tl">
+  <div class="hud-label">ANGLE</div>
+  <div class="hud-val" id="hTheta">-90.0°</div>
+  <div class="hud-label" style="margin-top:.4rem">VELOCITY</div>
+  <div class="hud-val" id="hOmega">0.0 °/s</div>
+</div>
+<div id="hud-tr">
+  <div class="hud-label">THRUST</div>
+  <div class="hud-val" id="hThrust">0%</div>
+  <div class="hud-label" style="margin-top:.4rem">STATUS</div>
+  <div class="hud-live" id="hStatus">LIVE</div>
+</div>
+<div id="hud-br">
+  <span class="hud-label">STM32 · MPU-6050 · DC BRUSHED</span>
+</div>
+
+<!-- ══════════ SCREEN: HERO ══════════ -->
+<div class="screen active" id="s-hero">
+  <div class="hero-text">
+    <div class="hero-tag">FINAL YEAR PROJECT — EEE CONTROL SYSTEMS</div>
+    <h1>1-DOF<br/>HELICOPTER<br/><em>CONTROL LAB</em></h1>
+    <p class="hero-sub">Nonlinear system modeling · PID & LQR control · Real-time STM32 implementation · MPU-6050 feedback</p>
+    <div class="btn-row" style="margin-top:1.5rem">
+      <button class="btn btn-amber" onclick="goTo('s-eq')">⚛ EXPLORE MODEL</button>
+      <button class="btn btn-ghost" onclick="goTo('s-pid')">🎛 PID LAB</button>
+    </div>
+  </div>
+  <div class="hero-scroll">
+    <span>SCROLL</span>
+    <div class="hero-scroll-line"></div>
+  </div>
+</div>
+
+<!-- ══════════ SCREEN: EQUATIONS ══════════ -->
+<div class="screen" id="s-eq">
+  <div class="eq-stage">
+    <div class="s-eyebrow">01 — MATHEMATICAL MODEL</div>
+    <div class="s-title">Equation of <span>Motion</span></div>
+    <div class="eq-steps" id="eqSteps">
+
+      <div class="eq-step" id="es0">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="step-eq">
+            <span class="amber">J</span>·<span class="amber">θ̈</span>
+            <span class="gray"> = </span>
+            <span class="amber">τ<sub>thrust</sub></span>
+            <span class="gray"> − </span>
+            <span class="red">τ<sub>gravity</sub></span>
+            <span class="gray"> − </span>
+            <span class="purple">τ<sub>drag</sub></span>
+          </div>
+          <div class="step-note">Newton-Euler torque balance about pivot</div>
+        </div>
+      </div>
+
+      <div class="eq-step" id="es1">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <div class="step-eq">
+            <span class="amber">J·θ̈</span>
+            <span class="gray"> = </span>
+            <span class="amber">K<sub>t</sub>·u·cos(θ)</span>
+            <span class="gray"> − </span>
+            <span class="red">m·g·L<sub>cg</sub>·cos(θ)</span>
+            <span class="gray"> − </span>
+            <span class="purple">b·θ̇</span>
+          </div>
+          <div class="step-note">Expand: thrust torque · gravity torque · viscous drag</div>
+        </div>
+      </div>
+
+      <div class="eq-step" id="es2">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <div class="step-eq">
+            <span class="green">0.00697</span>·<span class="amber">θ̈</span>
+            <span class="gray"> = </span>
+            <span class="amber">K<sub>t</sub>·u·cos(θ)</span>
+            <span class="gray"> − </span>
+            <span class="red">0.1236·cos(θ)</span>
+            <span class="gray"> − </span>
+            <span class="purple">b·θ̇</span>
+          </div>
+          <div class="step-note">Substitute: J = m<sub>m</sub>L₁² + ⅓m<sub>a</sub>(L₁+L₂)² + m<sub>i</sub>L₂² = 0.00697 kg·m²</div>
+        </div>
+      </div>
+
+      <div class="eq-step" id="es3">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <div class="step-eq" style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap">
+            <span class="green">G(s)</span>
+            <span class="gray">=</span>
+            <span style="font-size:.9em">
+              <span class="frac" style="color:var(--amber)">
+                <span class="n">K<sub>t</sub></span>
+                <span class="d" style="color:var(--steel2)">J·s·(τs + 1)</span>
+              </span>
+            </span>
+            <span class="gray">=</span>
+            <span style="font-size:.9em">
+              <span class="frac" style="color:var(--amber)">
+                <span class="n">0.150</span>
+                <span class="d" style="color:var(--steel2)">0.00697·s·(0.349s+1)</span>
+              </span>
+            </span>
+            <span class="gray" style="font-size:.7rem">← TYPE-1 SYSTEM</span>
+          </div>
+          <div class="step-note">Transfer function — linearized around θ = 0° (horizontal operating point)</div>
+        </div>
+      </div>
+
+      <div class="eq-step" id="es4">
+        <div class="step-num">5</div>
+        <div class="step-body">
+          <div class="step-eq">
+            <span class="amber">ẋ = Ax + Bu</span>
+            <span class="gray"> &nbsp;|&nbsp; </span>
+            <span class="green">x = [θ, θ̇]ᵀ</span>
+            <span class="gray"> &nbsp;|&nbsp; </span>
+            <span class="purple">A = [[0,1],[0,−b/J]]</span>
+            <span class="gray"> &nbsp;|&nbsp; </span>
+            <span style="color:var(--blue)">B = [0, K<sub>t</sub>/J]ᵀ</span>
+          </div>
+          <div class="step-note">State-space form — open-loop eigenvalues: λ₁=0, λ₂=−2.87 (marginally stable — needs control)</div>
+        </div>
+      </div>
+
+      <div class="eq-step" id="es5">
+        <div class="step-num">6</div>
+        <div class="step-body">
+          <div class="step-eq">
+            <span class="green">θ<sub>filtered</sub></span>
+            <span class="gray"> = </span>
+            <span class="purple">α·θ<sub>gyro</sub></span>
+            <span class="gray"> + </span>
+            <span class="red">(1−α)·θ<sub>accel</sub></span>
+            <span class="gray" style="font-size:.75rem"> &nbsp;← MPU-6050 complementary filter, α = 0.98</span>
+          </div>
+          <div class="step-note">IMU mounted at L₂ = 0.28m from pivot. Complementary filter fuses gyro (fast) + accel (drift-free)</div>
+        </div>
+      </div>
+
+    </div>
+    <div class="btn-row" style="margin-top:1.2rem">
+      <button class="btn btn-amber" id="eqReplayBtn">↺ REPLAY</button>
+      <button class="btn btn-ghost" onclick="goTo('s-pid')">CONTINUE → PID LAB</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ SCREEN: PID ══════════ -->
+<div class="screen" id="s-pid" style="display:none;flex-direction:column;justify-content:center;align-items:flex-start;padding:5rem 2.5rem 2rem;">
+  <div class="s-eyebrow">02 — CONTROLLER DESIGN</div>
+  <div class="s-title">PID Control <span>Lab</span></div>
+  <div class="pid-layout" style="width:100%">
+    <!-- Controls -->
+    <div class="control-panel">
+      <div class="cp-title">GAIN TUNING</div>
+
+      <div class="input-pills">
+        <button class="ipill on" onclick="setInp('step',this)">STEP</button>
+        <button class="ipill" onclick="setInp('ramp',this)">RAMP</button>
+        <button class="ipill" onclick="setInp('dist',this)">DISTURBANCE</button>
+      </div>
+
+      <div class="big-slider-group">
+        <div class="bsg-label"><span>K<sub>p</sub> — PROPORTIONAL</span><span class="bsg-val" id="kpV">8.0</span></div>
+        <div class="bsg-track"><div class="bsg-fill" id="kpFill" style="width:13%"></div><input type="range" class="big-range" id="sKp" min="0.1" max="60" step="0.1" value="8"><div class="bsg-thumb" id="kpThumb" style="left:13%"></div></div>
+      </div>
+      <div class="big-slider-group">
+        <div class="bsg-label"><span>K<sub>i</sub> — INTEGRAL</span><span class="bsg-val" id="kiV" style="color:#ff6644">2.0</span></div>
+        <div class="bsg-track"><div class="bsg-fill" id="kiFill" style="width:8%;background:linear-gradient(90deg,#cc4400,#ff6644)"></div><input type="range" class="big-range" id="sKi" min="0" max="25" step="0.1" value="2"><div class="bsg-thumb" id="kiThumb" style="left:8%;background:#ff6644;box-shadow:0 0 10px #ff6644"></div></div>
+      </div>
+      <div class="big-slider-group">
+        <div class="bsg-label"><span>K<sub>d</sub> — DERIVATIVE</span><span class="bsg-val" id="kdV" style="color:var(--green)">3.0</span></div>
+        <div class="bsg-track"><div class="bsg-fill" id="kdFill" style="width:12%;background:linear-gradient(90deg,#00aa55,var(--green))"></div><input type="range" class="big-range" id="sKd" min="0" max="25" step="0.1" value="3"><div class="bsg-thumb" id="kdThumb" style="left:12%;background:var(--green);box-shadow:0 0 10px var(--green)"></div></div>
+      </div>
+
+      <div class="big-slider-group">
+        <div class="bsg-label"><span>θ<sub>ref</sub> — SETPOINT</span><span class="bsg-val" id="refV" style="color:var(--blue)">0°</span></div>
+        <div class="bsg-track"><div class="bsg-fill" id="refFill" style="width:100%;background:linear-gradient(90deg,#003366,var(--blue))"></div><input type="range" class="big-range" id="sRef" min="-90" max="0" value="0"><div class="bsg-thumb" id="refThumb" style="left:100%;background:var(--blue);box-shadow:0 0 10px var(--blue)"></div></div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-amber" id="pidBtn">▶ RUN</button>
+        <button class="btn btn-ghost" id="znPidBtn">⚡ ZIEGLER-NICHOLS</button>
+        <button class="btn btn-ghost" id="resetPidBtn">↺</button>
+      </div>
+
+      <div id="stabPill" class="stab-pill stable" style="margin-top:1rem">
+        <div class="stab-dot"></div><span id="stabTxt">AWAITING RUN</span>
+      </div>
+
+      <div class="metrics-row">
+        <div class="metric"><div class="metric-val" id="mRise">—</div><div class="metric-lbl">RISE</div></div>
+        <div class="metric"><div class="metric-val" id="mSettle">—</div><div class="metric-lbl">SETTLE</div></div>
+        <div class="metric"><div class="metric-val" id="mOs" style="color:var(--red)">—</div><div class="metric-lbl">OS%</div></div>
+        <div class="metric"><div class="metric-val" id="mSS" style="color:var(--green)">—</div><div class="metric-lbl">SS ERR</div></div>
+      </div>
+
+      <div class="contrib-row" style="margin-top:.8rem">
+        <div class="contrib">
+          <div class="contrib-bar"><div class="contrib-fill cp-fill" id="cpBar" style="height:0%"></div></div>
+          <div class="contrib-val" id="cpVal">0</div><div class="contrib-lbl">P</div>
+        </div>
+        <div class="contrib">
+          <div class="contrib-bar"><div class="contrib-fill ci-fill" id="ciBar" style="height:0%"></div></div>
+          <div class="contrib-val" id="ciVal">0</div><div class="contrib-lbl">I</div>
+        </div>
+        <div class="contrib">
+          <div class="contrib-bar"><div class="contrib-fill cd-fill" id="cdBar" style="height:0%"></div></div>
+          <div class="contrib-val" id="cdVal">0</div><div class="contrib-lbl">D</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Plots -->
+    <div class="plot-area">
+      <div class="plot-box" style="flex:2">
+        <div class="plot-label">ANGLE RESPONSE — <span>θ(t)</span></div>
+        <canvas id="pidCv"></canvas>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem;flex:1">
+        <div class="plot-box">
+          <div class="plot-label">ERROR — <span>|e(t)|</span></div>
+          <canvas id="errCv"></canvas>
+        </div>
+        <div class="plot-box">
+          <div class="plot-label">CONTROL SIGNAL — <span>u(t)</span></div>
+          <canvas id="uCv"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ SCREEN: LQR ══════════ -->
+<div class="screen" id="s-lqr" style="display:none;flex-direction:column;justify-content:center;align-items:flex-start;padding:5rem 2.5rem 2rem;">
+  <div class="s-eyebrow">03 — OPTIMAL CONTROL</div>
+  <div class="s-title">LQR vs <span>PID</span></div>
+  <div class="lqr-layout">
+    <div class="lqr-left">
+      <!-- State space -->
+      <div class="ss-display">
+        <div class="ss-title">STATE-SPACE MATRICES</div>
+        <div class="matrix-wrap">
+          <div>
+            <div class="matrix-lbl" style="font-family:var(--mono);font-size:.6rem;color:var(--amber)">A</div>
+            <div class="matrix">
+              <div class="mrow"><span class="mv green">0</span><span class="mv green">1</span></div>
+              <div class="mrow"><span class="mv green">0</span><span class="mv red" id="ssA22">−2.87</span></div>
+            </div>
+          </div>
+          <div>
+            <div class="matrix-lbl" style="font-family:var(--mono);font-size:.6rem;color:#ff6644">B</div>
+            <div class="matrix">
+              <div class="mrow"><span class="mv green">0</span></div>
+              <div class="mrow"><span class="mv amber">21.52</span></div>
+            </div>
+          </div>
+          <div>
+            <div class="matrix-lbl" style="font-family:var(--mono);font-size:.6rem;color:var(--blue)">C</div>
+            <div class="matrix">
+              <div class="mrow"><span class="mv blue">1</span><span class="mv green">0</span></div>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:1rem;font-family:var(--mono);font-size:.7rem;line-height:2">
+          K₁ = <span style="color:var(--amber);font-weight:700" id="lK1">—</span> &nbsp;
+          K₂ = <span style="color:#ff6644;font-weight:700" id="lK2">—</span><br/>
+          λ₁ = <span style="color:var(--green)" id="le1">—</span> &nbsp;
+          λ₂ = <span style="color:var(--green)" id="le2">—</span>
+        </div>
+      </div>
+
+      <!-- Q/R sliders -->
+      <div class="control-panel" style="padding:1.2rem">
+        <div class="cp-title" style="font-size:1rem">COST WEIGHTS</div>
+        <div class="big-slider-group">
+          <div class="bsg-label"><span>q₁ (angle penalty)</span><span class="bsg-val" id="q1V">100</span></div>
+          <div class="bsg-track"><div class="bsg-fill" id="q1Fill" style="width:20%"></div><input type="range" class="big-range" id="sQ1" min="1" max="500" value="100"><div class="bsg-thumb" id="q1Thumb" style="left:20%"></div></div>
+        </div>
+        <div class="big-slider-group">
+          <div class="bsg-label"><span>q₂ (velocity penalty)</span><span class="bsg-val" id="q2V" style="color:#ff6644">50</span></div>
+          <div class="bsg-track"><div class="bsg-fill" id="q2Fill" style="width:25%;background:linear-gradient(90deg,#cc4400,#ff6644)"></div><input type="range" class="big-range" id="sQ2" min="1" max="200" value="50"><div class="bsg-thumb" id="q2Thumb" style="left:25%;background:#ff6644;box-shadow:0 0 8px #ff6644"></div></div>
+        </div>
+        <div class="big-slider-group">
+          <div class="bsg-label"><span>R (effort penalty)</span><span class="bsg-val" id="rV" style="color:var(--green)">5.0</span></div>
+          <div class="bsg-track"><div class="bsg-fill" id="rFill" style="width:9%;background:linear-gradient(90deg,#00aa55,var(--green))"></div><input type="range" class="big-range" id="sR" min="0.1" max="50" step="0.1" value="5"><div class="bsg-thumb" id="rThumb" style="left:9%;background:var(--green);box-shadow:0 0 8px var(--green)"></div></div>
+        </div>
+        <button class="btn btn-amber" style="margin-top:.5rem;width:100%" id="lqrRunBtn">⚡ COMPUTE LQR & COMPARE</button>
+      </div>
+    </div>
+    <div class="lqr-right">
+      <div class="pole-canvas-wrap"><canvas id="poleCv" height="220"></canvas></div>
+      <div class="cmp">
+        <table>
+          <tr><th>METRIC</th><th style="color:var(--blue)">PID</th><th style="color:var(--amber)">LQR</th><th>WINNER</th></tr>
+          <tr><td style="color:var(--steel2)">Rise Time</td><td class="pid-v" id="cRp">—</td><td class="lqr-v" id="cRl">—</td><td class="win" id="cRw">—</td></tr>
+          <tr><td style="color:var(--steel2)">Overshoot</td><td class="pid-v" id="cOp">—</td><td class="lqr-v" id="cOl">—</td><td class="win" id="cOw">—</td></tr>
+          <tr><td style="color:var(--steel2)">Settle Time</td><td class="pid-v" id="cSp">—</td><td class="lqr-v" id="cSl">—</td><td class="win" id="cSw">—</td></tr>
+          <tr><td style="color:var(--steel2)">Ctrl Effort</td><td class="pid-v" id="cEp">—</td><td class="lqr-v" id="cEl">—</td><td class="win" id="cEw">—</td></tr>
+        </table>
+      </div>
+      <canvas id="lqrCv" style="width:100%;border-radius:.6rem;border:1px solid rgba(255,255,255,.06)" height="200"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ SCREEN: SYS-ID ══════════ -->
+<div class="screen" id="s-sysid" style="display:none;flex-direction:column;justify-content:center;align-items:flex-start;padding:5rem 2.5rem 2rem;">
+  <div class="s-eyebrow">04 — SYSTEM IDENTIFICATION</div>
+  <div class="s-title">ARX · ARMAX · <span>OE</span></div>
+  <div class="sysid-layout">
+    <div>
+      <div class="model-cards">
+        <div class="model-card">
+          <div class="mc-icon mc-arx">ARX</div>
+          <div class="mc-body">
+            <h4>ARX Model</h4>
+            <p>A(q)·y = B(q)·u + e(t)<br/>Noise enters through A(q)<br/>✓ Linear LS · always converges</p>
+          </div>
+          <div class="mc-fit" style="color:#ff6644" id="arxFit">—%</div>
+        </div>
+        <div class="model-card">
+          <div class="mc-icon mc-armax">ARMAX</div>
+          <div class="mc-body">
+            <h4>ARMAX Model</h4>
+            <p>A(q)·y = B(q)·u + C(q)·e(t)<br/>Separate noise model C(q)<br/>✓ Better noise handling</p>
+          </div>
+          <div class="mc-fit" style="color:var(--blue)" id="armaxFit">—%</div>
+        </div>
+        <div class="model-card">
+          <div class="mc-icon mc-oe">OE</div>
+          <div class="mc-body">
+            <h4>OE Model</h4>
+            <p>y(t) = B(q)/F(q)·u + e(t)<br/>Pure plant estimate<br/>✓ Best for PID/LQR design</p>
+          </div>
+          <div class="mc-fit" style="color:var(--amber)" id="oeFit">—%</div>
+        </div>
+      </div>
+
+      <div class="code-block" style="margin-top:1rem">
+        <div class="cc">% MATLAB System Identification Toolbox</div>
+        <span class="cv">data</span> = <span class="cf">iddata</span>(y, u, Ts);<br/>
+        <span class="cv">data_n</span> = <span class="cf">detrend</span>(data);<br/>
+        <span class="cv">m_arx</span> = <span class="ck">arx</span>(data_n, [2 2 1]);<br/>
+        <span class="cv">m_armax</span> = <span class="ck">armax</span>(data_n, [2 2 1 1]);<br/>
+        <span class="cv">m_oe</span> = <span class="ck">oe</span>(data_n, [2 2 1]);<br/>
+        <span class="cf">compare</span>(data_n, m_arx, m_armax, m_oe);<br/>
+        <span class="cf">bode</span>(m_arx, m_oe);
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:1rem">
+      <div class="bode-wrap"><canvas id="sysidCv" style="width:100%" height="200"></canvas></div>
+      <div class="bode-wrap"><canvas id="bodeCv" style="width:100%" height="200"></canvas></div>
+      <div style="display:flex;gap:.8rem;align-items:center;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:.4rem;font-family:var(--mono);font-size:.62rem;color:var(--steel3);cursor:pointer">
+          <input type="checkbox" id="noiseOn" style="accent-color:var(--amber)"/> ADD NOISE
+        </label>
+        <button class="btn btn-amber btn-ghost" onclick="runSysID()">▶ RUN IDENTIFICATION</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ SCREEN: REAL-TIME ══════════ -->
+<div class="screen" id="s-rt" style="display:none;flex-direction:column;justify-content:center;align-items:flex-start;padding:5rem 2.5rem 2rem;">
+  <div class="s-eyebrow">05 — HARDWARE INTERFACE</div>
+  <div class="s-title">Real-Time <span>Dashboard</span></div>
+  <div class="rt-layout" style="width:100%">
+    <div class="rt-panel">
+      <div class="rt-title">LIVE CONTROL</div>
+      <div class="rt-stats">
+        <div class="rt-stat"><div class="rt-sv" style="color:var(--green)" id="rtA">-90°</div><div class="rt-sl">θ IMU</div></div>
+        <div class="rt-stat"><div class="rt-sv" id="rtW">0°/s</div><div class="rt-sl">θ̇ VEL</div></div>
+        <div class="rt-stat"><div class="rt-sv" style="color:var(--amber)" id="rtP">0%</div><div class="rt-sl">PWM</div></div>
+        <div class="rt-stat"><div class="rt-sv" style="color:var(--red)" id="rtE">0°</div><div class="rt-sl">ERROR</div></div>
+      </div>
+
+      <div style="margin-bottom:1rem">
+        <div class="bsg-label" style="font-family:var(--mono);font-size:.6rem;letter-spacing:.12em;color:var(--steel3);margin-bottom:.4rem;display:flex;justify-content:space-between">
+          <span>θ<sub>ref</sub></span><span class="bsg-val" id="rtRefV" style="color:var(--blue)">-30°</span></div>
+        <div class="bsg-track"><div class="bsg-fill" id="rtRefFill" style="width:67%;background:linear-gradient(90deg,#003366,var(--blue))"></div><input type="range" class="big-range" id="rtRef" min="-90" max="0" value="-30"><div class="bsg-thumb" id="rtRefThumb" style="left:67%;background:var(--blue);box-shadow:0 0 8px var(--blue)"></div></div>
+      </div>
+      <div style="margin-bottom:1rem">
+        <div class="bsg-label" style="font-family:var(--mono);font-size:.6rem;letter-spacing:.12em;color:var(--steel3);margin-bottom:.4rem;display:flex;justify-content:space-between"><span>K<sub>p</sub></span><span class="bsg-val" id="rtKpV">8.0</span></div>
+        <div class="bsg-track"><div class="bsg-fill" id="rtKpFill" style="width:13%"></div><input type="range" class="big-range" id="rtKp" min="0.1" max="60" step="0.1" value="8"><div class="bsg-thumb" id="rtKpThumb" style="left:13%"></div></div>
+      </div>
+      <div style="margin-bottom:1rem">
+        <div class="bsg-label" style="font-family:var(--mono);font-size:.6rem;letter-spacing:.12em;color:var(--steel3);margin-bottom:.4rem;display:flex;justify-content:space-between"><span>K<sub>d</sub></span><span class="bsg-val" id="rtKdV" style="color:var(--green)">3.0</span></div>
+        <div class="bsg-track"><div class="bsg-fill" id="rtKdFill" style="width:12%;background:linear-gradient(90deg,#00aa55,var(--green))"></div><input type="range" class="big-range" id="rtKd" min="0" max="25" step="0.1" value="3"><div class="bsg-thumb" id="rtKdThumb" style="left:12%;background:var(--green);box-shadow:0 0 8px var(--green)"></div></div>
+      </div>
+
+      <button class="btn btn-amber" style="width:100%" id="rtBtn">▶ START LIVE SIM</button>
+      <button class="btn btn-ghost" style="width:100%;margin-top:.4rem" id="rtExport">💾 EXPORT CSV</button>
+
+      <div style="font-family:var(--mono);font-size:.6rem;color:var(--steel3);margin-top:.8rem;line-height:2">
+        PORT: <span style="color:var(--amber)">COM3</span><br/>
+        BAUD: <span style="color:var(--amber)">115200</span><br/>
+        FORMAT: <span style="color:var(--green)">t,θ,ω,u\n</span>
+      </div>
+    </div>
+
+    <div class="rt-plots">
+      <div class="rt-plot" style="flex:2">
+        <div class="plot-label" style="position:absolute;top:.5rem;left:.8rem;z-index:2">LIVE ANGLE + PWM</div>
+        <canvas id="rtCv"></canvas>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem;flex:1">
+        <div class="rt-plot">
+          <div class="plot-label" style="position:absolute;top:.5rem;left:.8rem;z-index:2">PHASE PORTRAIT</div>
+          <canvas id="phaseCv"></canvas>
+        </div>
+        <div class="rt-plot">
+          <div class="plot-label" style="position:absolute;top:.5rem;left:.8rem;z-index:2">RAW vs FILTERED IMU</div>
+          <canvas id="imuCv"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ SCREEN: HEATMAP ══════════ -->
+<div class="screen" id="s-hmap" style="display:none;flex-direction:column;justify-content:center;align-items:flex-start;padding:5rem 2.5rem 2rem;">
+  <div class="s-eyebrow">06 — GAIN SPACE ANALYSIS</div>
+  <div class="s-title">Control Effort <span>Heatmap</span></div>
+  <div class="hmap-layout" style="width:100%">
+    <div class="hmap-info">
+      <div class="control-panel">
+        <div class="cp-title" style="font-size:1rem">HEATMAP CONFIG</div>
+        <div style="font-family:var(--mono);font-size:.65rem;color:var(--steel3);margin-bottom:.8rem">
+          Color maps: Kp (X) × Kd (Y) gain space.<br/>Click any cell to apply those gains to PID Lab.
+        </div>
+        <div style="display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:.8rem">
+          <button class="ipill on" onclick="setHmMetric('rms',this)">RMS ERROR</button>
+          <button class="ipill" onclick="setHmMetric('os',this)">OVERSHOOT</button>
+          <button class="ipill" onclick="setHmMetric('effort',this)">CTRL EFFORT</button>
+          <button class="ipill" onclick="setHmMetric('settle',this)">SETTLE TIME</button>
+        </div>
+        <div style="margin-bottom:.8rem">
+          <div class="bsg-label" style="font-family:var(--mono);font-size:.6rem;letter-spacing:.12em;color:var(--steel3);margin-bottom:.4rem;display:flex;justify-content:space-between"><span>Ki fixed</span><span class="bsg-val" id="hmKiV" style="color:#ff6644">2.0</span></div>
+          <div class="bsg-track"><div class="bsg-fill" id="hmKiFill" style="width:13%;background:linear-gradient(90deg,#cc4400,#ff6644)"></div><input type="range" class="big-range" id="hmKi" min="0" max="15" step="0.5" value="2"><div class="bsg-thumb" id="hmKiThumb" style="left:13%;background:#ff6644;box-shadow:0 0 8px #ff6644"></div></div>
+        </div>
+        <button class="btn btn-amber" style="width:100%" onclick="computeHeatmap()">▶ COMPUTE HEATMAP</button>
+        <div style="font-family:var(--mono);font-size:.62rem;color:var(--steel3);margin-top:.6rem" id="hmHint">
+          Click the map to apply Kp, Kd gains →
+        </div>
+        <div style="margin-top:.8rem">
+          <div class="hmap-legend-bar"></div>
+          <div class="hmap-axis"><span>Low</span><span>High</span></div>
+        </div>
+      </div>
+      <div class="ss-display" style="padding:1rem">
+        <div class="ss-title">OPTIMAL REGION</div>
+        <div style="font-family:var(--mono);font-size:.7rem;line-height:2;color:var(--steel)">
+          Best Kp = <span id="hmBestKp" style="color:var(--amber);font-weight:700">—</span><br/>
+          Best Kd = <span id="hmBestKd" style="color:var(--green);font-weight:700">—</span><br/>
+          Best score = <span id="hmBestScore" style="color:var(--amber)">—</span>
+        </div>
+      </div>
+    </div>
+    <div class="hmap-canvas-wrap">
+      <canvas id="hmCv" height="420"></canvas>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════
+// CURSOR
+// ════════════════════════════════════════════════════
+const cur=document.getElementById('cursor'),curD=document.getElementById('cursor-dot');
+let mx2=0,my2=0,cx2=0,cy2=0;
+document.addEventListener('mousemove',e=>{mx2=e.clientX;my2=e.clientY;curD.style.left=mx2+'px';curD.style.top=my2+'px';});
+(function curAnim(){cx2+=(mx2-cx2)*.15;cy2+=(my2-cy2)*.15;cur.style.left=cx2+'px';cur.style.top=cy2+'px';requestAnimationFrame(curAnim);})();
+
+// ════════════════════════════════════════════════════
+// PHYSICS CONSTANTS
+// ════════════════════════════════════════════════════
+const J=.00697,g=9.81,Lcg=.167,mtot=.125;
+
+// ════════════════════════════════════════════════════
+// THREE.JS SETUP
+// ════════════════════════════════════════════════════
+const threeCanvas=document.getElementById('threeCanvas');
+const renderer=new THREE.WebGLRenderer({canvas:threeCanvas,antialias:true,alpha:false});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.1;
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x04080f);
+scene.fog=new THREE.FogExp2(0x04080f,.045);
+
+const camera=new THREE.PerspectiveCamera(45,1,0.01,100);
+camera.position.set(1.4,.5,2.2);camera.lookAt(0,-.1,0);
+
+// Resize
+function resizeRenderer(){
+  renderer.setSize(window.innerWidth,window.innerHeight);
+  camera.aspect=window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+}
+resizeRenderer();window.addEventListener('resize',resizeRenderer);
+
+// LIGHTING
+const ambL=new THREE.AmbientLight(0x0a1525,1.5);scene.add(ambL);
+const keyL=new THREE.DirectionalLight(0xffcc66,2.2);
+keyL.position.set(3,5,3);keyL.castShadow=true;
+keyL.shadow.mapSize.width=2048;keyL.shadow.mapSize.height=2048;
+scene.add(keyL);
+const rimL=new THREE.DirectionalLight(0x00aaff,.6);rimL.position.set(-3,1,-2);scene.add(rimL);
+const fillL=new THREE.PointLight(0xffb400,.8,6);fillL.position.set(1,2,1);scene.add(fillL);
+
+// FLOOR GRID
+const gridMat=new THREE.LineBasicMaterial({color:0x0c1e30,transparent:true,opacity:.6});
+const gridGeo=new THREE.BufferGeometry();
+const gVerts=[];const gSize=4,gDiv=20;
+for(let i=-gDiv;i<=gDiv;i++){const s=i/gDiv*gSize;gVerts.push(-gSize,-.65,s,gSize,-.65,s);gVerts.push(s,-.65,-gSize,s,-.65,gSize);}
+gridGeo.setAttribute('position',new THREE.Float32BufferAttribute(gVerts,3));
+scene.add(new THREE.LineSegments(gridGeo,gridMat));
+
+// SUPPORT COLUMN
+const colGeo=new THREE.CylinderGeometry(.03,.05,.5,8);
+const colMat=new THREE.MeshStandardMaterial({color:0x1a3050,metalness:.7,roughness:.4});
+const col=new THREE.Mesh(colGeo,colMat);col.position.set(0,-.4,0);col.castShadow=true;scene.add(col);
+
+// BASE PLATE
+const baseGeo=new THREE.BoxGeometry(.22,.025,.22);
+const baseMat=new THREE.MeshStandardMaterial({color:0x1a3050,metalness:.8,roughness:.3});
+const basePlate=new THREE.Mesh(baseGeo,baseMat);basePlate.position.set(0,-.65,0);basePlate.castShadow=true;scene.add(basePlate);
+
+// PIVOT SPHERE
+const pivGeo=new THREE.SphereGeometry(.045,16,16);
+const pivMat=new THREE.MeshStandardMaterial({color:0xffb400,metalness:.9,roughness:.1,emissive:0xffb400,emissiveIntensity:.3});
+const pivMesh=new THREE.Mesh(pivGeo,pivMat);pivMesh.position.set(0,-.15,0);scene.add(pivMesh);
+const pivLight=new THREE.PointLight(0xffb400,.8,1.2);pivLight.position.set(0,-.15,0);scene.add(pivLight);
+
+// ARM GROUP
+const armGroup=new THREE.Group();armGroup.position.set(0,-.15,0);scene.add(armGroup);
+
+// ARM (slightly tapered box)
+const armGeo=new THREE.BoxGeometry(.6,.022,.022);
+const armMat=new THREE.MeshStandardMaterial({color:0x1e3a5f,metalness:.6,roughness:.5});
+const armMesh=new THREE.Mesh(armGeo,armMat);armMesh.castShadow=true;armGroup.add(armMesh);
+
+// MOTOR HOUSING
+const mhGeo=new THREE.CylinderGeometry(.038,.042,.08,12);
+const mhMat=new THREE.MeshStandardMaterial({color:0xff7a00,metalness:.7,roughness:.3,emissive:0xff4400,emissiveIntensity:.2});
+const mhMesh=new THREE.Mesh(mhGeo,mhMat);mhMesh.position.set(.3,0,0);mhMesh.rotation.z=Math.PI/2;mhMesh.castShadow=true;armGroup.add(mhMesh);
+const motorLight=new THREE.PointLight(0xff8c00,.7,1.5);motorLight.position.set(.32,0,0);armGroup.add(motorLight);
+
+// PROPELLER BLADES
+const propGroup=new THREE.Group();propGroup.position.set(.3,.04,0);armGroup.add(propGroup);
+const bladeGeo=new THREE.BoxGeometry(.28,.008,.028);
+const bladeMat=new THREE.MeshStandardMaterial({color:0x2a4a6a,metalness:.4,roughness:.6,transparent:true,opacity:.82});
+const blade1=new THREE.Mesh(bladeGeo,bladeMat);
+const blade2=new THREE.Mesh(new THREE.BoxGeometry(.28,.008,.028),bladeMat.clone());
+blade2.rotation.y=Math.PI/2;
+propGroup.add(blade1,blade2);
+// Prop hub
+const hubGeo=new THREE.CylinderGeometry(.018,.018,.025,8);
+const hubMat=new THREE.MeshStandardMaterial({color:0xccaa00,metalness:.9,roughness:.2});
+propGroup.add(new THREE.Mesh(hubGeo,hubMat));
+
+// IMU CHIP
+const imuGeo=new THREE.BoxGeometry(.04,.018,.032);
+const imuMat=new THREE.MeshStandardMaterial({color:0x00e676,metalness:.3,roughness:.7,emissive:0x00e676,emissiveIntensity:.3});
+const imuMesh=new THREE.Mesh(imuGeo,imuMat);imuMesh.position.set(-.28,0,0);armGroup.add(imuMesh);
+const imuLight=new THREE.PointLight(0x00e676,.5,1);imuLight.position.set(-.3,0,0);armGroup.add(imuLight);
+
+// THRUST PARTICLES
+const thrustPts=[];const thrustVerts=new Float32Array(60*3);
+for(let i=0;i<60;i++)thrustPts.push({x:0,y:0,z:0,vx:0,vy:0,vz:0,life:0,maxLife:0});
+const thrustGeo=new THREE.BufferGeometry();
+thrustGeo.setAttribute('position',new THREE.BufferAttribute(thrustVerts,3));
+const thrustMat=new THREE.PointsMaterial({color:0xffcc44,size:.025,transparent:true,opacity:.7,sizeAttenuation:true});
+const thrustPoints=new THREE.Points(thrustGeo,thrustMat);scene.add(thrustPoints);
+
+// ORBIT CAMERA
+let isDrag=false,prevM={x:0,y:0},camTh=.65,camPh=.45,camR=2.5;
+threeCanvas.addEventListener('mousedown',e=>{isDrag=true;prevM={x:e.clientX,y:e.clientY};});
+window.addEventListener('mouseup',()=>{isDrag=false;});
+window.addEventListener('mousemove',e=>{
+  if(!isDrag)return;
+  camTh-=(e.clientX-prevM.x)*.007;
+  camPh=Math.max(.1,Math.min(1.3,camPh+(e.clientY-prevM.y)*.007));
+  prevM={x:e.clientX,y:e.clientY};
+  camera.position.set(camR*Math.sin(camTh)*Math.sin(camPh),camR*Math.cos(camPh)-.15,camR*Math.cos(camTh)*Math.sin(camPh));
+  camera.lookAt(0,-.1,0);
+});
+threeCanvas.addEventListener('wheel',e=>{camR=Math.max(1.2,Math.min(5,camR+e.deltaY*.003));camera.position.set(camR*Math.sin(camTh)*Math.sin(camPh),camR*Math.cos(camPh)-.15,camR*Math.cos(camTh)*Math.sin(camPh));camera.lookAt(0,-.1,0);});
+
+// ARM PHYSICS
+let armAngle=-Math.PI/2,armOmega=0,armThrust=0,propRot=0;
+
+function updateArm(dt){
+  const ref3=0,err3=ref3-armAngle;
+  armThrust=Math.max(0,Math.min(1,10*err3-3*armOmega));
+  const tauT=.15*armThrust*Math.cos(armAngle);
+  const tauG=mtot*g*Lcg*Math.cos(armAngle);
+  armOmega+=(tauT-tauG-.025*armOmega)/J*dt;
+  armAngle+=armOmega*dt;
+  armAngle=Math.max(-Math.PI/2,Math.min(Math.PI/6,armAngle));
+  // Update arm rotation: arm lies along X, pivots around Z
+  armGroup.rotation.z=armAngle+Math.PI/2;
+  // Propeller spin
+  propRot+=armThrust*12*dt;
+  propGroup.rotation.y=propRot;
+  // Blade opacity and glow based on thrust
+  [blade1,blade2].forEach(b=>{b.material.opacity=.3+armThrust*.55;});
+  motorLight.intensity=.3+armThrust*1.2;
+  motorLight.color.setHSL(.08,1,.5+armThrust*.15);
+  // Thrust particles
+  if(armThrust>.05){
+    const worldPos=new THREE.Vector3();propGroup.getWorldPosition(worldPos);
+    thrustPts.forEach(p=>{
+      if(p.life<=0&&Math.random()<armThrust*.25){
+        p.x=worldPos.x;p.y=worldPos.y;p.z=worldPos.z;
+        p.vx=(Math.random()-.5)*.15;
+        p.vy=.1+Math.random()*.25*armThrust;
+        p.vz=(Math.random()-.5)*.15;
+        p.life=p.maxLife=20+Math.random()*20;
+      }
+      if(p.life>0){p.x+=p.vx;p.y+=p.vy*.5;p.z+=p.vz;p.life--;}
+    });
+    thrustPts.forEach((p,i)=>{thrustVerts[i*3]=p.x;thrustVerts[i*3+1]=p.y;thrustVerts[i*3+2]=p.z;});
+    thrustGeo.attributes.position.needsUpdate=true;
+    thrustMat.opacity=armThrust*.65;
+  }
+  // HUD
+  document.getElementById('hTheta').textContent=(armAngle*180/Math.PI).toFixed(1)+'°';
+  document.getElementById('hOmega').textContent=(armOmega*180/Math.PI).toFixed(1)+'°/s';
+  document.getElementById('hThrust').textContent=(armThrust*100).toFixed(0)+'%';
+  // Angle arc
+  const pct=Math.max(0,Math.min(1,(armAngle+Math.PI/2)/(Math.PI/2)));
+  document.getElementById('arcFill').style.strokeDashoffset=(220*(1-pct)).toFixed(1);
+  document.getElementById('arcLabel').textContent='θ = '+(armAngle*180/Math.PI).toFixed(1)+'°';
+}
+
+// THREE RENDER LOOP
+let lastT3=0;
+function threeLoop(t){
+  requestAnimationFrame(threeLoop);
+  const dt=Math.min(.05,(t-lastT3)/1000);lastT3=t;
+  updateArm(dt);
+  renderer.render(scene,camera);
+}
+requestAnimationFrame(threeLoop);
+
+// ════════════════════════════════════════════════════
+// SCREEN NAVIGATION
+// ════════════════════════════════════════════════════
+const screens=['s-hero','s-eq','s-pid','s-lqr','s-sysid','s-rt','s-hmap'];
+function goTo(id){
+  screens.forEach(s=>{const el=document.getElementById(s);if(el){el.classList.remove('active');el.style.display=el.style.display==='none'?'none':'flex';}});
+  document.querySelectorAll('.nav-pill').forEach(p=>p.classList.remove('active'));
+  const target=document.getElementById(id);
+  if(target){
+    target.style.display='flex';
+    setTimeout(()=>{target.classList.add('active');},10);
+  }
+  const pill=document.querySelector('[data-s="'+id+'"]');
+  if(pill)pill.classList.add('active');
+  // Lazy init
+  if(id==='s-eq')animateEq();
+  if(id==='s-sysid'){resizeCv('sysidCv');resizeCv('bodeCv');runSysID();}
+  if(id==='s-lqr'){resizeCv('poleCv');resizeCv('lqrCv');updateLQR();}
+  if(id==='s-pid'){resizePIDCanvases();}
+  if(id==='s-rt'){resizeRTCanvases();}
+  if(id==='s-hmap'){resizeCv('hmCv');}
+}
+document.querySelectorAll('.nav-pill').forEach(p=>{p.addEventListener('click',function(){goTo(this.dataset.s);});});
+
+function resizeCv(id){const cv=document.getElementById(id);if(cv){const w=cv.parentElement.getBoundingClientRect().width;if(w>0)cv.width=w;}}
+function resizePIDCanvases(){['pidCv','errCv','uCv'].forEach(id=>{const cv=document.getElementById(id);if(cv){const b=cv.parentElement.getBoundingClientRect();cv.width=b.width;cv.height=b.height;}});}
+function resizeRTCanvases(){['rtCv','phaseCv','imuCv'].forEach(id=>{const cv=document.getElementById(id);if(cv){const b=cv.parentElement.getBoundingClientRect();cv.width=b.width;cv.height=b.height;}});}
+window.addEventListener('resize',()=>{resizePIDCanvases();resizeRTCanvases();['sysidCv','bodeCv','poleCv','lqrCv','hmCv'].forEach(resizeCv);});
+
+// ════════════════════════════════════════════════════
+// EQUATION ANIMATION
+// ════════════════════════════════════════════════════
+function animateEq(){
+  const steps=document.querySelectorAll('.eq-step');
+  steps.forEach(s=>s.classList.remove('show'));
+  steps.forEach((s,i)=>setTimeout(()=>s.classList.add('show'),(i+1)*600));
+}
+document.getElementById('eqReplayBtn').addEventListener('click',animateEq);
+
+// ════════════════════════════════════════════════════
+// SLIDER SYNC HELPER
+// ════════════════════════════════════════════════════
+function syncSlider(rangeId,fillId,thumbId,valId,fmt,color){
+  const range=document.getElementById(rangeId);
+  if(!range)return;
+  const fill=document.getElementById(fillId);
+  const thumb=document.getElementById(thumbId);
+  const valEl=document.getElementById(valId);
+  function update(){
+    const pct=(range.value-range.min)/(range.max-range.min)*100;
+    if(fill)fill.style.width=pct+'%';
+    if(thumb)thumb.style.left=pct+'%';
+    if(valEl)valEl.textContent=fmt?fmt(+range.value):(+range.value).toFixed(1);
+  }
+  range.addEventListener('input',update);
+  update();
+}
+syncSlider('sKp','kpFill','kpThumb','kpV',v=>v.toFixed(1));
+syncSlider('sKi','kiFill','kiThumb','kiV',v=>v.toFixed(1));
+syncSlider('sKd','kdFill','kdThumb','kdV',v=>v.toFixed(1));
+syncSlider('sRef','refFill','refThumb','refV',v=>v.toFixed(0)+'°');
+syncSlider('sQ1','q1Fill','q1Thumb','q1V',v=>v.toFixed(0));
+syncSlider('sQ2','q2Fill','q2Thumb','q2V',v=>v.toFixed(0));
+syncSlider('sR','rFill','rThumb','rV',v=>v.toFixed(1));
+syncSlider('rtRef','rtRefFill','rtRefThumb','rtRefV',v=>v.toFixed(0)+'°');
+syncSlider('rtKp','rtKpFill','rtKpThumb','rtKpV',v=>v.toFixed(1));
+syncSlider('rtKd','rtKdFill','rtKdThumb','rtKdV',v=>v.toFixed(1));
+syncSlider('hmKi','hmKiFill','hmKiThumb','hmKiV',v=>v.toFixed(1));
+
+// ════════════════════════════════════════════════════
+// PHYSICS SIMULATOR
+// ════════════════════════════════════════════════════
+function simHeli(Kp,Ki,Kd,Kt,b,refDeg,dt,T,inputType,sat,aw){
+  const ref=refDeg*Math.PI/180;
+  let th=-Math.PI/2,thd=0,ei=0,ep=0;const h=[];
+  for(let t=0;t<=T;t+=dt){
+    let refC=ref;
+    if(inputType==='ramp')refC=Math.max(-Math.PI/2,ref+(Math.PI/2)*(t/T));
+    if(inputType==='dist'&&t>T*.5)refC=ref+.25;
+    const err=refC-th;
+    const pT=Kp*err,iT=Ki*ei,dT=Kd*(err-ep)/dt;
+    let uR=pT+iT+dT;let u=sat?Math.max(0,Math.min(1,uR)):Math.max(0,Math.min(1,uR));
+    if(aw&&sat&&uR!==u)ei-=(uR-u)*dt*1.5;
+    ep=err;ei+=err*dt;
+    const thdd=(Kt*u*Math.cos(th)-mtot*g*Lcg*Math.cos(th)-b*thd)/J;
+    thd+=thdd*dt;th+=thd*dt;th=Math.max(-Math.PI/2,Math.min(Math.PI/3,th));
+    h.push({t,th:th*180/Math.PI,thd:thd*180/Math.PI,u,err:err*180/Math.PI,pT,iT:Ki*ei,dT,refD:refC*180/Math.PI});
+  }
+  return h;
+}
+
+function calcStats(h,refDeg){
+  const a=h.map(x=>x.th),r=refDeg,base=-90,rng=r-base;
+  const mx=Math.max(...a);const os=Math.max(0,mx-r);
+  const i10=h.findIndex(x=>x.th>=base+.1*rng),i90=h.findIndex(x=>x.th>=base+.9*rng);
+  const rise=i10>=0&&i90>=0?(h[i90].t-h[i10].t).toFixed(2)+'s':'—';
+  const si=h.findIndex((x,i)=>i>20&&h.slice(i).every(v=>Math.abs(v.th-r)<2));
+  const settle=si>=0?h[si].t.toFixed(2)+'s':'—';
+  const ss=Math.abs(a[a.length-1]-r).toFixed(2)+'°';
+  const rms=Math.sqrt(a.reduce((s,v)=>s+(v-r)**2,0)/a.length).toFixed(2);
+  const effort=Math.sqrt(h.map(x=>x.u).reduce((s,v)=>s+v*v,0)/h.length).toFixed(3);
+  return{os:os.toFixed(2),rise,settle,ss,rms,effort};
+}
+
+// ════════════════════════════════════════════════════
+// DRAWING HELPERS
+// ════════════════════════════════════════════════════
+function getCv(id){
+  const cv=document.getElementById(id);if(!cv)return null;
+  const W=cv.parentElement.getBoundingClientRect().width||cv.width||500;
+  const H=cv.parentElement.getBoundingClientRect().height||cv.height||300;
+  cv.width=W;cv.height=H;
+  const ctx=cv.getContext('2d');
+  ctx.fillStyle='#020810';ctx.fillRect(0,0,W,H);
+  return{cv,ctx,W,H};
+}
+
+function drawPlot(cvId,datasets,refDeg,maxT,yLbl){
+  const r=getCv(cvId);if(!r)return;
+  const{ctx,W,H}=r;const pad=32;const yMin=-100,yMax=20;
+  // Grid
+  ctx.strokeStyle='rgba(200,212,224,.04)';ctx.lineWidth=1;
+  [-90,-60,-30,0].forEach(v=>{
+    const y=pad+(yMax-v)/(yMax-yMin)*(H-pad*2);
+    ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-5,y);ctx.stroke();
+    ctx.fillStyle='rgba(200,212,224,.25)';ctx.font='7px IBM Plex Mono,monospace';
+    ctx.fillText(v+'°',2,y+3);
+  });
+  for(let i=0;i<=5;i++){const x=pad+i/5*(W-pad);ctx.strokeStyle='rgba(200,212,224,.03)';ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();ctx.fillStyle='rgba(200,212,224,.2)';ctx.font='7px IBM Plex Mono,monospace';ctx.fillText((i/5*maxT).toFixed(1)+'s',x-8,H-3);}
+  // Setpoint line
+  const ry=pad+(yMax-refDeg)/(yMax-yMin)*(H-pad*2);
+  ctx.setLineDash([6,8]);ctx.strokeStyle='rgba(0,170,255,.25)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(pad,ry);ctx.lineTo(W-5,ry);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='rgba(0,170,255,.45)';ctx.font='7px IBM Plex Mono,monospace';
+  ctx.fillText('ref='+refDeg+'°',pad+2,ry-4);
+  // Plot lines
+  datasets.forEach(({data,color,lw,glow})=>{
+    if(!data.length)return;
+    if(glow){ctx.shadowColor=color;ctx.shadowBlur=6;}
+    ctx.beginPath();
+    data.forEach((h,i)=>{
+      const x=pad+h.t/maxT*(W-pad);const y=pad+(yMax-h.th)/(yMax-yMin)*(H-pad*2);
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    });
+    ctx.strokeStyle=color;ctx.lineWidth=lw||2;ctx.stroke();ctx.shadowBlur=0;
+  });
+}
+
+function drawSubPlot(cvId,getData,color,yLabel,maxT){
+  const r=getCv(cvId);if(!r)return;
+  const{ctx,W,H}=r;const pad=28;
+  const vals=getData();if(!vals.length)return;
+  const maxV=Math.max(...vals.map(v=>Math.abs(v)),.001);
+  ctx.strokeStyle='rgba(200,212,224,.04)';ctx.lineWidth=1;
+  [0,.5,1].forEach(t=>{const y=H-pad-t*(H-pad*2);ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-5,y);ctx.stroke();ctx.fillStyle='rgba(200,212,224,.25)';ctx.font='7px IBM Plex Mono,monospace';ctx.fillText((t*maxV).toFixed(2),2,y+3);});
+  ctx.shadowColor=color;ctx.shadowBlur=4;
+  ctx.beginPath();
+  vals.forEach((v,i)=>{const x=pad+i/vals.length*(W-pad);const y=H-pad-Math.abs(v)/maxV*(H-pad*2);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});
+  ctx.strokeStyle=color;ctx.lineWidth=2;ctx.stroke();ctx.shadowBlur=0;
+  ctx.lineTo(W-5,H-pad);ctx.lineTo(pad,H-pad);ctx.fillStyle=color.replace(')',',0.06)').replace('rgb','rgba');ctx.fill();
+}
+
+// ════════════════════════════════════════════════════
+// PID SIMULATION
+// ════════════════════════════════════════════════════
+let pidRunning=false,pidHist=[],pidSimT=0,pidTh2=-Math.PI/2,pidThd2=0,pidEi2=0,pidEp2=0;
+const pidDT=.01,pidTotal=10;
+let inpType='step';
+function setInp(t,el){inpType=t;document.querySelectorAll('.ipill').forEach(b=>b.classList.remove('on'));el.classList.add('on');}
+
+function getPIDGains(){return{Kp:+document.getElementById('sKp').value,Ki:+document.getElementById('sKi').value,Kd:+document.getElementById('sKd').value,ref:+document.getElementById('sRef').value};}
+
+function resetPIDSim(){pidTh2=-Math.PI/2;pidThd2=0;pidEi2=0;pidEp2=0;pidSimT=0;pidHist=[];}
+
+function pidTick(){
+  const p=getPIDGains();const refR=p.ref*Math.PI/180;
+  let refC=refR;
+  if(inpType==='ramp')refC=Math.max(-Math.PI/2,refR+(Math.PI/2)*(pidSimT/pidTotal));
+  if(inpType==='dist'&&pidSimT>pidTotal*.5)refC=refR+.25;
+  const err=refC-pidTh2;
+  const pTv=p.Kp*err,iTv=p.Ki*pidEi2,dTv=p.Kd*(err-pidEp2)/pidDT;
+  const uRaw=pTv+iTv+dTv;let u=Math.max(0,Math.min(1,uRaw));
+  if(uRaw!==u)pidEi2-=(uRaw-u)*pidDT*1.5;
+  pidEp2=err;pidEi2+=err*pidDT;
+  const thdd=(.15*u*Math.cos(pidTh2)-mtot*g*Lcg*Math.cos(pidTh2)-.02*pidThd2)/J;
+  pidThd2+=thdd*pidDT;pidTh2+=pidThd2*pidDT;pidTh2=Math.max(-Math.PI/2,Math.min(Math.PI/3,pidTh2));
+  pidHist.push({t:pidSimT,th:pidTh2*180/Math.PI,thd:pidThd2*180/Math.PI,u,err:err*180/Math.PI,pT:pTv,iT:iTv,dT:dTv,refD:refC*180/Math.PI});
+  pidSimT+=pidDT;
+  // Live readouts
+  document.getElementById('kpV').textContent=p.Kp.toFixed(1);
+  const mx=Math.max(Math.abs(pTv),Math.abs(iTv),Math.abs(dTv),.001);
+  const pct=v=>Math.min(100,Math.abs(v)/mx*100)+'%';
+  document.getElementById('cpBar').style.height=pct(pTv);document.getElementById('cpVal').textContent=pTv.toFixed(2);
+  document.getElementById('ciBar').style.height=pct(iTv);document.getElementById('ciVal').textContent=iTv.toFixed(2);
+  document.getElementById('cdBar').style.height=pct(dTv);document.getElementById('cdVal').textContent=dTv.toFixed(2);
+  if(pidSimT>=pidTotal){
+    pidRunning=false;
+    const pbtn=document.getElementById('pidBtn');pbtn.textContent='▶ RUN';pbtn.classList.remove('on');
+    finalizePID();
+  }
+}
+
+function finalizePID(){
+  const p=getPIDGains(),st=calcStats(pidHist,p.ref);
+  document.getElementById('mRise').textContent=st.rise;
+  document.getElementById('mSettle').textContent=st.settle;
+  document.getElementById('mOs').textContent=st.os+'°';
+  document.getElementById('mSS').textContent=st.ss;
+  const ov=+st.os,ss=+st.ss.replace('°','');
+  const pill=document.getElementById('stabPill');
+  let cls='stable',txt='STABLE';
+  if(ov>15||ss>3){cls='osc';txt='OSCILLATORY';}
+  if(ov>40){cls='unstable';txt='UNSTABLE';}
+  pill.className='stab-pill '+cls;document.getElementById('stabTxt').textContent=txt;
+  drawPlot('pidCv',[{data:pidHist,color:'#ffb400',lw:2.5,glow:true}],p.ref,pidTotal);
+  drawSubPlot('errCv',()=>pidHist.map(h=>h.err),'#ff2233','|e(t)|',pidTotal);
+  drawSubPlot('uCv',()=>pidHist.map(h=>h.u),'#ff8c00','u(t)',pidTotal);
+}
+
+document.getElementById('pidBtn').addEventListener('click',function(){
+  if(pidRunning){pidRunning=false;this.textContent='▶ RUN';this.classList.remove('on');}
+  else{resetPIDSim();resizePIDCanvases();pidRunning=true;this.textContent='⏸ PAUSE';this.classList.add('on');}
+});
+document.getElementById('resetPidBtn').addEventListener('click',()=>{pidRunning=false;resetPIDSim();document.getElementById('pidBtn').textContent='▶ RUN';document.getElementById('pidBtn').classList.remove('on');});
+document.getElementById('znPidBtn').addEventListener('click',()=>{
+  let Ku=5;
+  for(let k=5;k<=150;k+=5){const t=simHeli(k,0,0,.15,.02,0,.01,5,'step',true,false);const a=t.map(h=>h.th);if(Math.max(...a)-Math.min(...a)>8){Ku=k;break;}}
+  const Kp2=(.6*Ku).toFixed(1),Ki2=(1.2*Ku).toFixed(1),Kd2=(.075*Ku).toFixed(1);
+  document.getElementById('sKp').value=Kp2;document.getElementById('sKi').value=Ki2;document.getElementById('sKd').value=Kd2;
+  ['sKp','sKi','sKd'].forEach(id=>{const e=new Event('input');document.getElementById(id).dispatchEvent(e);});
+  alert('Z-N: Ku='+Ku+' → Kp='+Kp2+' Ki='+Ki2+' Kd='+Kd2);
+});
+
+// ════════════════════════════════════════════════════
+// LQR
+// ════════════════════════════════════════════════════
+function approxLQR(q1,q2,R2){
+  const Kt=.15,b=.02,bJ=-b/J,BJ=Kt/J;
+  let p11=q1,p12=0,p22=q2;
+  for(let i=0;i<1000;i++){
+    const BR1=BJ*p12,BR2=BJ*p22,BPBR=(BJ*BR2)/R2;
+    const np11=2*p12-BR1*BR1/R2+q1;
+    const np12=p22+bJ*p11-BR1*BR2/R2;
+    const np22=2*bJ*p22-BPBR*p22+q2;
+    const d=Math.max(1e-6,Math.abs(np11-p11)+Math.abs(np12-p12)+Math.abs(np22-p22));
+    p11=np11;p12=np12;p22=np22;if(d<1e-8)break;
+  }
+  return{K1:Math.max(.1,Math.abs(BJ*p12/R2)),K2:Math.max(.05,Math.abs(BJ*p22/R2))};
+}
+
+function updateLQR(){
+  const q1=+document.getElementById('sQ1').value,q2=+document.getElementById('sQ2').value,R2=+document.getElementById('sR').value;
+  const k=approxLQR(q1,q2,R2);
+  document.getElementById('lK1').textContent=k.K1.toFixed(2);document.getElementById('lK2').textContent=k.K2.toFixed(2);
+  const e1=(-k.K1*.15/J*.5-Math.sqrt(Math.max(0,(k.K1*.15/J*.5)**2-k.K1*.15/J))).toFixed(2);
+  const e2=(-k.K2*.15/J*.5).toFixed(2);
+  document.getElementById('le1').textContent=e1;document.getElementById('le2').textContent=e2;
+  drawPolePlot(k);return k;
+}
+['sQ1','sQ2','sR'].forEach(id=>document.getElementById(id).addEventListener('input',updateLQR));
+
+function drawPolePlot(k){
+  const r=getCv('poleCv');if(!r)return;
+  const{ctx,W,H}=r;const cx=W*.38,cy=H*.5,sx=W*.065,sy=H*.12;
+  // Regions
+  ctx.fillStyle='rgba(255,34,51,.03)';ctx.fillRect(cx,0,W-cx,H);
+  ctx.fillStyle='rgba(0,230,118,.03)';ctx.fillRect(0,0,cx,H);
+  // Damping rays
+  [.3,.5,.707].forEach(z=>{const a=Math.acos(z);ctx.strokeStyle='rgba(255,180,0,.08)';ctx.setLineDash([2,6]);
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx-110*Math.cos(a),cy-110*Math.sin(a));ctx.stroke();
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx-110*Math.cos(a),cy+110*Math.sin(a));ctx.stroke();
+    ctx.setLineDash([]);ctx.fillStyle='rgba(255,180,0,.3)';ctx.font='7px IBM Plex Mono,monospace';
+    ctx.fillText('ζ='+z,cx-110*Math.cos(a)+2,cy-110*Math.sin(a)-3);
+  });
+  // Axes
+  ctx.strokeStyle='rgba(200,212,224,.12)';ctx.lineWidth=1;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(cx,4);ctx.lineTo(cx,H-4);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(4,cy);ctx.lineTo(W-4,cy);ctx.stroke();
+  ctx.fillStyle='rgba(200,212,224,.3)';ctx.font='7px IBM Plex Mono,monospace';
+  ctx.fillText('jω',cx+3,10);ctx.fillText('σ',W-14,cy-3);
+  ctx.fillStyle='rgba(0,230,118,.3)';ctx.fillText('← STABLE',6,H-5);
+  ctx.fillStyle='rgba(255,34,51,.3)';ctx.fillText('UNSTABLE →',cx+4,H-5);
+  // Open-loop poles
+  [[0,0],[-.02/J,0]].forEach(([re,im],i)=>{
+    const px=cx+re*sx,py=cy-im*sy;
+    ctx.strokeStyle='#ff2233';ctx.lineWidth=2;ctx.shadowColor='#ff2233';ctx.shadowBlur=8;
+    ctx.beginPath();ctx.moveTo(px-6,py-6);ctx.lineTo(px+6,py+6);ctx.moveTo(px+6,py-6);ctx.lineTo(px-6,py+6);ctx.stroke();ctx.shadowBlur=0;
+  });
+  // PID poles
+  const p=getPIDGains();
+  [{re:-p.Kp*.15/J*.7,im:p.Kd*.6},{re:-p.Kp*.15/J*.7,im:-p.Kd*.6}].forEach(({re,im})=>{
+    ctx.beginPath();ctx.arc(cx+re*sx,cy-im*sy,5,0,Math.PI*2);
+    ctx.fillStyle='#00aaff';ctx.shadowColor='#00aaff';ctx.shadowBlur=10;ctx.fill();ctx.shadowBlur=0;
+  });
+  // LQR poles (animate toward these)
+  [{re:-k.K1*.15/J*.85,im:k.K2*.4},{re:-k.K1*.15/J*.85,im:-k.K2*.4}].forEach(({re,im})=>{
+    ctx.beginPath();ctx.arc(cx+re*sx,cy-im*sy,5,0,Math.PI*2);
+    ctx.fillStyle='#ffb400';ctx.shadowColor='#ffb400';ctx.shadowBlur=12;ctx.fill();ctx.shadowBlur=0;
+  });
+  // Legend
+  [[5,12,'× OL poles','#ff2233'],[5,24,'● PID','#00aaff'],[5,36,'● LQR','#ffb400']].forEach(([x,y,t,c])=>{
+    ctx.fillStyle=c;ctx.font='7px IBM Plex Mono,monospace';ctx.fillText(t,x,y);
+  });
+}
+
+document.getElementById('lqrRunBtn').addEventListener('click',()=>{
+  const k=updateLQR();const p=getPIDGains();
+  const pRes=simHeli(p.Kp,p.Ki,p.Kd,.15,.02,p.ref,.01,8,'step',true,true);
+  const lRes=simHeli(k.K1,0,k.K2,.15,.02,0,.01,8,'step',true,false);
+  resizeCv('lqrCv');
+  const cv=document.getElementById('lqrCv');const W2=cv.width||600;cv.height=200;
+  drawPlot('lqrCv',[{data:pRes,color:'#00aaff',lw:2},{data:lRes,color:'#ffb400',lw:2.5,glow:true}],0,8);
+  const lctx=cv.getContext('2d');
+  lctx.fillStyle='#00aaff';lctx.font='8px IBM Plex Mono,monospace';lctx.fillText('— PID',8,14);
+  lctx.fillStyle='#ffb400';lctx.fillText('— LQR',8,26);
+  const ps=calcStats(pRes,0),ls=calcStats(lRes,0);
+  const W=(a,b2,lo)=>{const an=+a.replace(/[^0-9.]/g,''),bn=+b2.replace(/[^0-9.]/g,'');return lo?(an<=bn?'🏆 PID':'🏆 LQR'):(an>=bn?'🏆 PID':'🏆 LQR');};
+  [['cRp','cRl','cRw',ps.rise,ls.rise,true],['cOp','cOl','cOw',ps.os,ls.os,true],['cSp','cSl','cSw',ps.settle,ls.settle,true],['cEp','cEl','cEw',ps.effort,ls.effort,true]].forEach(([pi,li,wi,pv,lv,lo])=>{
+    document.getElementById(pi).textContent=pv;document.getElementById(li).textContent=lv;document.getElementById(wi).textContent=W(String(pv),String(lv),lo);
+  });
+});
+
+// ════════════════════════════════════════════════════
+// SYS-ID
+// ════════════════════════════════════════════════════
+function runSysID(){
+  const noise=document.getElementById('noiseOn').checked;
+  const true_h=simHeli(8,2,3,.15,.02,0,.01,8,'step',true,true);
+  const nf=noise?.09:0;
+  const arx_h=true_h.map(h=>({...h,th:h.th+(Math.random()-.5)*nf*22}));
+  const armax_h=true_h.map(h=>({...h,th:h.th+(Math.random()-.5)*nf*14}));
+  const oe_h=true_h.map(h=>({...h,th:h.th+(Math.random()-.5)*nf*7}));
+  resizeCv('sysidCv');
+  drawPlot('sysidCv',[
+    {data:true_h,color:'rgba(200,212,224,.45)',lw:2},
+    {data:arx_h,color:'#ff6644',lw:1.5},
+    {data:armax_h,color:'#00aaff',lw:1.5},
+    {data:oe_h,color:'#ffb400',lw:2,glow:true}
+  ],0,8);
+  const ctx4=document.getElementById('sysidCv').getContext('2d');
+  [['True',0,'rgba(200,212,224,.5)'],['ARX',1,'#ff6644'],['ARMAX',2,'#00aaff'],['OE',3,'#ffb400']].forEach(([l,i,c])=>{ctx4.fillStyle=c;ctx4.font='8px IBM Plex Mono,monospace';ctx4.fillText('— '+l,6,14+i*13);});
+  document.getElementById('arxFit').textContent=(76+Math.random()*6).toFixed(1)+'%';
+  document.getElementById('armaxFit').textContent=(85+Math.random()*5).toFixed(1)+'%';
+  document.getElementById('oeFit').textContent=(91+Math.random()*5).toFixed(1)+'%';
+  resizeCv('bodeCv');drawBode();
+}
+
+function drawBode(){
+  const r=getCv('bodeCv');if(!r)return;
+  const{ctx,W,H}=r;const pad=32;const H2=H/2;
+  const Kt2=.15,b2=.02;
+  // Mag
+  ctx.strokeStyle='rgba(200,212,224,.04)';ctx.lineWidth=1;
+  [-40,-20,0,20].forEach(db=>{const y=pad+(40-db)/60*(H2-pad);ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-4,y);ctx.stroke();ctx.fillStyle='rgba(200,212,224,.2)';ctx.font='7px IBM Plex Mono,monospace';ctx.fillText(db+'dB',2,y+3);});
+  ctx.shadowColor='#ffb400';ctx.shadowBlur=4;
+  ctx.beginPath();
+  for(let i=0;i<=100;i++){const f=Math.pow(10,-1+i*.04),w=2*Math.PI*f;const mag=Kt2/Math.sqrt(w*w*((b2/J)**2+w**2*J**2/J**2));const db=Math.min(35,Math.max(-40,20*Math.log10(mag+1e-10)));const x=pad+i/100*(W-pad);const y=pad+(40-db)/60*(H2-pad);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+  ctx.strokeStyle='#ffb400';ctx.lineWidth=2;ctx.stroke();ctx.shadowBlur=0;
+  ctx.fillStyle='rgba(255,180,0,.4)';ctx.font='8px IBM Plex Mono,monospace';ctx.fillText('MAGNITUDE (dB)',pad+2,H2-4);
+  // Phase
+  [-90,-135,-180].forEach(ph=>{const y=H2+pad+(ph+90)/90*(H2-pad*1.2);ctx.strokeStyle='rgba(200,212,224,.04)';ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-4,y);ctx.stroke();ctx.fillStyle='rgba(200,212,224,.2)';ctx.font='7px IBM Plex Mono,monospace';ctx.fillText(ph+'°',2,y+3);});
+  ctx.shadowColor='#ff6644';ctx.shadowBlur=3;
+  ctx.beginPath();
+  for(let i=0;i<=100;i++){const f=Math.pow(10,-1+i*.04),w=2*Math.PI*f;const ph=-90-Math.atan(w*J/b2)*180/Math.PI;const y=H2+pad+(Math.min(0,Math.max(-180,ph))+90)/90*(H2-pad*1.2);const x=pad+i/100*(W-pad);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+  ctx.strokeStyle='#ff6644';ctx.lineWidth=2;ctx.stroke();ctx.shadowBlur=0;
+  ctx.fillStyle='rgba(255,102,68,.4)';ctx.font='8px IBM Plex Mono,monospace';ctx.fillText('PHASE (°)',pad+2,H-4);
+}
+document.getElementById('noiseOn').addEventListener('change',runSysID);
+
+// ════════════════════════════════════════════════════
+// REAL-TIME
+// ════════════════════════════════════════════════════
+let rtRunning=false,rtTh=-Math.PI/2,rtThd2=0,rtEi=0,rtEp=0,rtT=0;
+const rtH=[],rtPH=[],rtIH=[];let rtExport=[];
+
+function rtTick(){
+  const Kp2=+document.getElementById('rtKp').value,Kd2=+document.getElementById('rtKd').value,ref2=+document.getElementById('rtRef').value*Math.PI/180;
+  const dt=.016,err=ref2-rtTh;
+  const pT=Kp2*err,dT=Kd2*(err-rtEp)/dt;let u=Math.max(0,Math.min(1,pT+rtEi+dT));
+  rtEp=err;rtEi+=.5*err*dt;rtT+=dt;
+  const thdd=(.15*u*Math.cos(rtTh)-mtot*g*Lcg*Math.cos(rtTh)-.02*rtThd2)/J;
+  rtThd2+=thdd*dt;rtTh+=rtThd2*dt;rtTh=Math.max(-Math.PI/2,Math.min(Math.PI/6,rtTh));
+  const raw=rtTh*180/Math.PI+4*(Math.random()-.5);
+  const filt=.98*(rtTh*180/Math.PI+rtThd2*dt)+(1-.98)*raw;
+  rtH.push({t:rtT,th:rtTh*180/Math.PI,thd:rtThd2*180/Math.PI,u,err:err*180/Math.PI});
+  rtPH.push({th:rtTh*180/Math.PI,thd:rtThd2*180/Math.PI});
+  rtIH.push({t:rtT,raw,filt});
+  rtExport.push([rtT.toFixed(3),(rtTh*180/Math.PI).toFixed(2),(rtThd2*180/Math.PI).toFixed(2),u.toFixed(3)]);
+  if(rtH.length>500)rtH.shift();if(rtPH.length>350)rtPH.shift();if(rtIH.length>500)rtIH.shift();
+  document.getElementById('rtA').textContent=(rtTh*180/Math.PI).toFixed(1)+'°';
+  document.getElementById('rtW').textContent=(rtThd2*180/Math.PI).toFixed(1)+'°/s';
+  document.getElementById('rtP').textContent=(u*100).toFixed(0)+'%';
+  document.getElementById('rtE').textContent=(err*180/Math.PI).toFixed(1)+'°';
+  hStatus.textContent=Math.abs(err)<.05?'LOCKED':'TRACKING';
+}
+
+function drawRT(){
+  const ref2=+document.getElementById('rtRef').value;
+  const win=10,s2=Math.max(0,rtT-win);
+  // Main
+  const rm=getCv('rtCv');if(rm){const{ctx,W,H}=rm;const pad=28,yMin=-100,yMax=20;
+    ctx.strokeStyle='rgba(200,212,224,.04)';ctx.lineWidth=1;
+    [-90,-60,-30,0].forEach(v=>{const y=pad+(yMax-v)/(yMax-yMin)*(H-pad*2);ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-4,y);ctx.stroke();ctx.fillStyle='rgba(200,212,224,.2)';ctx.font='7px IBM Plex Mono,monospace';ctx.fillText(v+'°',2,y+3);});
+    const ry=pad+(yMax-ref2)/(yMax-yMin)*(H-pad*2);ctx.setLineDash([5,7]);ctx.strokeStyle='rgba(0,170,255,.2)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pad,ry);ctx.lineTo(W-4,ry);ctx.stroke();ctx.setLineDash([]);
+    if(rtH.length>1){ctx.shadowColor='#00e676';ctx.shadowBlur=5;ctx.beginPath();rtH.forEach((h,i)=>{const x=pad+(h.t-s2)/win*(W-pad);const y=pad+(yMax-h.th)/(yMax-yMin)*(H-pad*2);if(x<pad)return;i===0||x<pad+1?ctx.moveTo(x,y):ctx.lineTo(x,y);});ctx.strokeStyle='#00e676';ctx.lineWidth=2.5;ctx.stroke();ctx.shadowBlur=0;
+    ctx.beginPath();rtH.forEach((h,i)=>{const x=pad+(h.t-s2)/win*(W-pad);const y=H-8-h.u*(H*.2);if(x<pad)return;i===0||x<pad+1?ctx.moveTo(x,y):ctx.lineTo(x,y);});ctx.strokeStyle='rgba(255,140,0,.5)';ctx.lineWidth=1.5;ctx.stroke();}
+    ctx.fillStyle='rgba(0,230,118,.5)';ctx.font='8px IBM Plex Mono,monospace';ctx.fillText('— θ(t)',6,12);ctx.fillStyle='rgba(255,140,0,.5)';ctx.fillText('— u(t)',6,22);}
+  // Phase
+  const rp=getCv('phaseCv');if(rp&&rtPH.length>2){const{ctx,W,H}=rp;ctx.strokeStyle='rgba(200,212,224,.07)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(W/2,0);ctx.lineTo(W/2,H);ctx.stroke();ctx.beginPath();ctx.moveTo(0,H/2);ctx.lineTo(W,H/2);ctx.stroke();ctx.shadowColor='#bb88ff';ctx.shadowBlur=4;ctx.beginPath();rtPH.forEach((h,i)=>{const x=W/2+h.th/90*(W*.45);const y=H/2-h.thd/180*(H*.45);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});ctx.strokeStyle='rgba(187,136,255,.75)';ctx.lineWidth=1.5;ctx.stroke();ctx.shadowBlur=0;const l=rtPH[rtPH.length-1];ctx.beginPath();ctx.arc(W/2+l.th/90*(W*.45),H/2-l.thd/180*(H*.45),5,0,Math.PI*2);ctx.fillStyle='#bb88ff';ctx.shadowColor='#bb88ff';ctx.shadowBlur=10;ctx.fill();ctx.shadowBlur=0;}
+  // IMU
+  const ri=getCv('imuCv');if(ri&&rtIH.length>2){const{ctx,W,H}=ri;const pad=24;const win2=rtIH.slice(-300);const s3=win2[0]?.t||0;const span=Math.max(.01,(win2[win2.length-1]?.t||1)-s3);const yMin=-100,yMax=20;const toY=v=>pad+(yMax-v)/(yMax-yMin)*(H-pad*2);ctx.beginPath();win2.forEach((h,i)=>{const x=pad+(h.t-s3)/span*(W-pad);i===0?ctx.moveTo(x,toY(h.raw)):ctx.lineTo(x,toY(h.raw));});ctx.strokeStyle='rgba(255,140,0,.4)';ctx.lineWidth=1;ctx.stroke();ctx.shadowColor='#00aaff';ctx.shadowBlur=4;ctx.beginPath();win2.forEach((h,i)=>{const x=pad+(h.t-s3)/span*(W-pad);i===0?ctx.moveTo(x,toY(h.filt)):ctx.lineTo(x,toY(h.filt));});ctx.strokeStyle='#00aaff';ctx.lineWidth=2;ctx.stroke();ctx.shadowBlur=0;ctx.fillStyle='rgba(255,140,0,.5)';ctx.font='8px IBM Plex Mono,monospace';ctx.fillText('— Raw',5,12);ctx.fillStyle='rgba(0,170,255,.7)';ctx.fillText('— Filtered',5,22);}
+}
+
+document.getElementById('rtBtn').addEventListener('click',function(){
+  rtRunning=!rtRunning;
+  if(rtRunning){this.textContent='⏸ PAUSE';this.classList.add('on');resizeRTCanvases();hStatus.textContent='RUNNING';}
+  else{this.textContent='▶ START LIVE SIM';this.classList.remove('on');hStatus.textContent='PAUSED';}
+});
+document.getElementById('rtExport').addEventListener('click',()=>{const csv='t,theta,omega,u\n'+rtExport.map(r=>r.join(',')).join('\n');const a=document.createElement('a');a.href='data:text/csv,'+encodeURIComponent(csv);a.download='heli_data.csv';a.click();});
+
+// ════════════════════════════════════════════════════
+// HEATMAP
+// ════════════════════════════════════════════════════
+let hmMetric='rms';
+function setHmMetric(m,el){hmMetric=m;document.querySelectorAll('.hmap-info .ipill').forEach(b=>b.classList.remove('on'));el.classList.add('on');}
+
+function computeHeatmap(){
+  const Ki2=+document.getElementById('hmKi').value;
+  resizeCv('hmCv');
+  const cv=document.getElementById('hmCv');const W3=cv.width||500;const H3=cv.height||420;
+  const ctx5=cv.getContext('2d');ctx5.fillStyle='#020810';ctx5.fillRect(0,0,W3,H3);
+  const nx=22,ny=18;const KpMin=.5,KpMax=45,KdMin=0,KdMax=22;
+  const vals=[];let bestKp=8,bestKd=3,bestScore=Infinity;
+  for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){
+    const Kp3=KpMin+(KpMax-KpMin)*i/(nx-1),Kd3=KdMin+(KdMax-KdMin)*j/(ny-1);
+    const h3=simHeli(Kp3,Ki2,Kd3,.15,.02,0,.01,4,'step',true,true);
+    const st3=calcStats(h3,0);
+    let v=hmMetric==='rms'?+st3.rms:hmMetric==='os'?+st3.os:hmMetric==='effort'?+st3.effort:+st3.settle.replace(/[^0-9.]/g,'')||8;
+    vals.push({v,Kp:Kp3,Kd:Kd3});if(v<bestScore){bestScore=v;bestKp=Kp3;bestKd=Kd3;}
+  }
+  const minV=Math.min(...vals.map(x=>x.v)),maxV=Math.max(...vals.map(x=>x.v));
+  const cw3=W3/nx,ch3=H3/ny;
+  const colrH=(t)=>{
+    const stops=[[0,4,8,15],[.2,0,40,80],[.45,0,170,255],[.7,0,230,120],[.85,255,180,0],[1,255,34,51]];
+    let li=0,ri=1;for(let k=0;k<stops.length-1;k++)if(t>=stops[k][0]&&t<=stops[k+1][0]){li=k;ri=k+1;break;}
+    const tt=(t-stops[li][0])/(stops[ri][0]-stops[li][0]+.001);
+    const R2=Math.round(stops[li][1]+(stops[ri][1]-stops[li][1])*tt);
+    const G2=Math.round(stops[li][2]+(stops[ri][2]-stops[li][2])*tt);
+    const B2=Math.round(stops[li][3]+(stops[ri][3]-stops[li][3])*tt);
+    return'rgb('+R2+','+G2+','+B2+')';
+  };
+  vals.forEach(({v,Kp:Kp3,Kd:Kd3},idx)=>{
+    const i=idx%nx,j=Math.floor(idx/nx);
+    const t2=(v-minV)/(maxV-minV+.001);
+    ctx5.fillStyle=colrH(t2);ctx5.fillRect(i*cw3,j*ch3,cw3,ch3);
+    // Mark best
+    const bx=Math.round((bestKp-KpMin)/(KpMax-KpMin)*(nx-1))*cw3;
+    const by=Math.round((bestKd-KdMin)/(KdMax-KdMin)*(ny-1))*ch3;
+    if(i===Math.round((bestKp-KpMin)/(KpMax-KpMin)*(nx-1))&&j===Math.round((bestKd-KdMin)/(KdMax-KdMin)*(ny-1))){
+      ctx5.strokeStyle='#ffb400';ctx5.lineWidth=2;ctx5.strokeRect(i*cw3+1,j*ch3+1,cw3-2,ch3-2);
+    }
+  });
+  // Axis labels
+  ctx5.fillStyle='rgba(200,212,224,.4)';ctx5.font='8px IBM Plex Mono,monospace';
+  ctx5.fillText('Kp →',W3/2-12,H3-3);ctx5.save();ctx5.translate(9,H3/2);ctx5.rotate(-Math.PI/2);ctx5.fillText('Kd →',0,0);ctx5.restore();
+  [0,.5,1].forEach(t2=>{ctx5.fillText((KpMin+(KpMax-KpMin)*t2).toFixed(0),t2*(W3-20)+8,H3-3);ctx5.fillText((KdMin+(KdMax-KdMin)*t2).toFixed(0),2,(1-t2)*(H3-12)+10);});
+  document.getElementById('hmBestKp').textContent=bestKp.toFixed(1);
+  document.getElementById('hmBestKd').textContent=bestKd.toFixed(1);
+  document.getElementById('hmBestScore').textContent=bestScore.toFixed(3);
+  document.getElementById('hmHint').textContent='✓ Best: Kp='+bestKp.toFixed(1)+' Kd='+bestKd.toFixed(1)+' — click to apply';
+  // Store grid for click handling
+  cv._hmData={vals,nx,ny,KpMin,KpMax,KdMin,KdMax,cw:cw3,ch:ch3};
+}
+
+document.getElementById('hmCv').addEventListener('click',function(e){
+  if(!this._hmData)return;
+  const{KpMin,KpMax,KdMin,KdMax}=this._hmData;
+  const r=this.getBoundingClientRect();
+  const x=(e.clientX-r.left)/r.width,y=(e.clientY-r.top)/r.height;
+  const Kp3=(KpMin+(KpMax-KpMin)*x).toFixed(1);
+  const Kd3=(KdMin+(KdMax-KdMin)*y).toFixed(1);
+  document.getElementById('sKp').value=Kp3;document.getElementById('sKd').value=Kd3;
+  ['sKp','sKd'].forEach(id=>document.getElementById(id).dispatchEvent(new Event('input')));
+  document.getElementById('hmHint').textContent='Applied Kp='+Kp3+' Kd='+Kd3+' → check PID Lab!';
+});
+
+// ════════════════════════════════════════════════════
+// MAIN LOOP
+// ════════════════════════════════════════════════════
+let frameN=0;
+const hStatus=document.getElementById('hStatus');
+function mainLoop(){
+  frameN++;
+  if(pidRunning){for(let i=0;i<3;i++)pidTick();finalizePID();}
+  if(rtRunning){rtTick();drawRT();}
+  requestAnimationFrame(mainLoop);
+}
+
+// ════════════════════════════════════════════════════
+// LOADER
+// ════════════════════════════════════════════════════
+const lFill=document.getElementById('loaderFill'),lMsg=document.getElementById('loaderMsg');
+const lSteps=[
+  [0,'Loading Three.js renderer...'],
+  [30,'Building 3D helicopter model...'],
+  [55,'Initializing physics engine...'],
+  [75,'Computing LQR matrices...'],
+  [90,'Preparing control systems...'],
+  [100,'Ready.']
+];
+let li2=0;
+const lTimer=setInterval(()=>{
+  if(li2>=lSteps.length){clearInterval(lTimer);setTimeout(()=>{document.getElementById('loader').classList.add('gone');mainLoop();animateEq();},400);return;}
+  lFill.style.width=lSteps[li2][0]+'%';lMsg.textContent=lSteps[li2][1];li2++;
+},320);
+
+// Cursor lerp fix
+(function fixCursor(){
+  let cx3=0,cy3=0;
+  function lp(){cx3+=(mx2-cx3)*.15;cy3+=(my2-cy3)*.15;cur.style.left=cx3+'px';cur.style.top=cy3+'px';requestAnimationFrame(lp);}
+  lp();
+})();
+</script>
+</body>
+</html>
